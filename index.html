@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] } } }
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  [data-expand] { max-height: 0; overflow: hidden; transition: max-height 0.2s ease-out; }
+  [data-expand].open { max-height: 2000px; transition: max-height 0.4s ease-in; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  body { overscroll-behavior: none; }
+  select, input, textarea { font-size: 16px !important; }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans">
+<div id="app"></div>
+
+<script type="module">
+import { h, render } from 'https://esm.sh/preact@10.19.3';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'https://esm.sh/preact@10.19.3/hooks';
+import htm from 'https://esm.sh/htm@3.1.1';
+const html = htm.bind(h);
+
+// ── Icons (inline SVG) ──
+const I = (d, s = 20) => html`<svg width=${s} height=${s} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d=${d} /></svg>`;
+const Icons = {
+  plus: () => I('M12 5v14M5 12h14'),
+  search: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`,
+  chevDown: () => I('M6 9l6 6 6-6', 16),
+  chevRight: () => I('M9 18l6-6-6-6', 16),
+  moon: () => I('M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z', 18),
+  sun: () => html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
+  trash: () => html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  download: () => I('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3', 18),
+  upload: () => I('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12', 18),
+  filter: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`,
+  settings: () => html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  x: () => I('M18 6L6 18M6 6l12 12', 16),
+  sync: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>`,
+  alert: () => html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  cal: () => html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  tag: () => html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+  check: () => I('M20 6L9 17l-5-5', 14),
+  cloud: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+  layers: () => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+};
+
+// ── Constants ──
+const SECTIONS = ['TODAY', 'TO DO', 'TO TRACK', 'COMPLETE'];
+const PRIORITIES = ['1 - High', '2 - Med', '3 - Low'];
+const STATUSES = ['In Process', 'Pending', 'Blocked', 'TBD', 'Complete'];
+const DEFAULT_CATS = ['Personal', 'Foundation / Dubai', 'OIL', 'SSL', 'CGL', 'SSL UK Admin', 'Software Ventures'];
+const DEFAULT_POCS = ['Nibras','Raiyan','Iftekhar','Rahat','Taukir','Riyad','Mahbub','Tawfik','Buneka','Ranjan','Mahiuddin','Gobinda','Ashik','Gias','Kamruzzaman','Kamrul/Merry','ED Sir','Rahat/Nushan','Taukir/ED Sir','Father / Basher','Shahriar / Basher'];
+const GROUP_OPTIONS = [
+  { v: 'section', l: 'Section' }, { v: 'priority', l: 'Priority' }, { v: 'category', l: 'Category' },
+  { v: 'poc', l: 'POC' }, { v: 'tag', l: 'Tag' }, { v: 'followup', l: 'Follow-ups' },
+];
+const PRI_COLORS = { '1 - High': 'bg-rose-500', '2 - Med': 'bg-amber-500', '3 - Low': 'bg-sky-500' };
+const STA_COLORS = { 'In Process': 'bg-blue-500', Pending: 'bg-amber-500', Blocked: 'bg-red-500', TBD: 'bg-stone-400', Complete: 'bg-emerald-500' };
+
+const LS_KEY = 'tracker_data_v1';
+const GIST_KEY = 'tracker_gist_config';
+const uid = () => `t${Date.now()}${Math.random().toString(36).slice(2,7)}`;
+const parseTags = s => !s ? [] : Array.isArray(s) ? s.filter(Boolean).map(t=>t.trim()).filter(Boolean) : s.split(',').map(t=>t.trim()).filter(Boolean);
+const fmtDate = s => { if(!s) return ''; try { return new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); } catch { return s; } };
+
+const expandTask = (t, i = 0) => ({
+  id: t.id || uid(),
+  section: t.section || t.sec || 'TO DO',
+  category: t.category || t.cat || '',
+  item: t.item || '',
+  detail: t.detail || t.det || '',
+  poc: t.poc || '',
+  linkedContact: t.linkedContact || t.lc || '',
+  startDate: t.startDate || t.sd || '',
+  endDate: t.endDate || t.ed || '',
+  followUpDate: t.followUpDate || t.fd || '',
+  priority: t.priority || t.pri || '2 - Med',
+  status: t.status || t.sta || 'In Process',
+  tags: parseTags(t.tags),
+  notes: t.notes || '',
+  createdAt: t.createdAt || Date.now(),
+  updatedAt: t.updatedAt || Date.now(),
+});
+
+// ── Gist Sync ──
+const Gist = {
+  cfg() { try { return JSON.parse(localStorage.getItem(GIST_KEY)); } catch { return null; } },
+  setCfg(c) { localStorage.setItem(GIST_KEY, JSON.stringify(c)); },
+  clearCfg() { localStorage.removeItem(GIST_KEY); },
+  async load() {
+    const c = this.cfg(); if (!c) return null;
+    const r = await fetch(`https://api.github.com/gists/${c.gistId}`, { headers: { Authorization: `Bearer ${c.token}` } });
+    if (!r.ok) throw new Error(`Gist load failed: ${r.status}`);
+    const g = await r.json();
+    return JSON.parse(g.files['tracker.json'].content);
+  },
+  async save(data) {
+    const c = this.cfg(); if (!c) return;
+    const r = await fetch(`https://api.github.com/gists/${c.gistId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { 'tracker.json': { content: JSON.stringify(data) } } })
+    });
+    if (!r.ok) throw new Error(`Gist save failed: ${r.status}`);
+  },
+  async create(token) {
+    const r = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'Task Tracker Data', public: false, files: { 'tracker.json': { content: JSON.stringify({ tasks: [], meta: {} }) } } })
+    });
+    if (!r.ok) throw new Error(`Gist create failed: ${r.status}`);
+    return (await r.json()).id;
+  },
+  async test(token) {
+    const r = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error('Invalid token');
+    return (await r.json()).login;
+  }
+};
+
+// ── App ──
+function App() {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [groupBy, setGroupBy] = useState('section');
+  const [filters, setFilters] = useState({ category:'all', poc:'all', priority:'all', status:'all', tag:'all' });
+  const [expandedId, setExpandedId] = useState(null);
+  const [collapsed, setCollapsed] = useState({});
+  const [dark, setDark] = useState(false);
+  const [categories, setCategories] = useState(DEFAULT_CATS);
+  const [pocs, setPocs] = useState(DEFAULT_POCS);
+  const [quickAdd, setQuickAdd] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [modal, setModal] = useState(null); // 'settings' | 'sync' | null
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | synced | error
+  const [lastSync, setLastSync] = useState(null);
+  const saveTimer = useRef(null);
+  const fileRef = useRef(null);
+  const initialized = useRef(false);
+
+  // Theme
+  useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
+
+  // Load
+  useEffect(() => {
+    (async () => {
+      let data = null;
+      // Try gist first
+      const gc = Gist.cfg();
+      if (gc) {
+        try {
+          setSyncStatus('syncing');
+          data = await Gist.load();
+          setSyncStatus('synced');
+          setLastSync(new Date());
+        } catch(e) {
+          console.warn('Gist load failed, falling back to local', e);
+          setSyncStatus('error');
+        }
+      }
+      // Fallback to localStorage
+      if (!data) {
+        try { data = JSON.parse(localStorage.getItem(LS_KEY)); } catch {}
+      }
+      if (data && data.tasks) {
+        setTasks(data.tasks.map(t => expandTask(t)));
+        if (data.meta) {
+          if (data.meta.dark != null) setDark(data.meta.dark);
+          if (data.meta.categories) setCategories(data.meta.categories);
+          if (data.meta.pocs) setPocs(data.meta.pocs);
+          if (data.meta.groupBy) setGroupBy(data.meta.groupBy);
+        }
+      }
+      initialized.current = true;
+      setLoading(false);
+    })();
+  }, []);
+
+  // Persist (debounced)
+  const persist = useCallback((ts, meta) => {
+    if (!initialized.current) return;
+    const data = { tasks: ts, meta };
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      if (Gist.cfg()) {
+        try {
+          setSyncStatus('syncing');
+          await Gist.save(data);
+          setSyncStatus('synced');
+          setLastSync(new Date());
+        } catch(e) {
+          console.warn('Gist save failed', e);
+          setSyncStatus('error');
+        }
+      }
+    }, 2000);
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    persist(tasks, { dark, categories, pocs, groupBy });
+  }, [tasks, dark, categories, pocs, groupBy, loading]);
+
+  const syncNow = useCallback(async () => {
+    if (!Gist.cfg()) return;
+    try {
+      setSyncStatus('syncing');
+      const data = await Gist.load();
+      if (data && data.tasks) {
+        setTasks(data.tasks.map(t => expandTask(t)));
+        if (data.meta) {
+          if (data.meta.dark != null) setDark(data.meta.dark);
+          if (data.meta.categories) setCategories(data.meta.categories);
+          if (data.meta.pocs) setPocs(data.meta.pocs);
+          if (data.meta.groupBy) setGroupBy(data.meta.groupBy);
+        }
+      }
+      setSyncStatus('synced');
+      setLastSync(new Date());
+    } catch(e) {
+      setSyncStatus('error');
+    }
+  }, []);
+
+  // Derived
+  const allCats = useMemo(() => { const s = new Set(categories); tasks.forEach(t => t.category && s.add(t.category)); return [...s].sort(); }, [tasks, categories]);
+  const allPocs = useMemo(() => { const s = new Set(pocs); tasks.forEach(t => t.poc && s.add(t.poc)); return [...s].sort(); }, [tasks, pocs]);
+  const allContacts = useMemo(() => { const s = new Set(); tasks.forEach(t => t.linkedContact && s.add(t.linkedContact)); pocs.forEach(p => s.add(p)); return [...s].sort(); }, [tasks, pocs]);
+  const allTags = useMemo(() => { const s = new Set(); tasks.forEach(t => (t.tags||[]).forEach(tag => s.add(tag))); return [...s].sort(); }, [tasks]);
+
+  const filtered = useMemo(() => tasks.filter(t => {
+    if (search) { const s = search.toLowerCase(); const h = [t.item,t.detail,t.poc,t.category,t.notes,t.linkedContact,(t.tags||[]).join(' ')].join(' ').toLowerCase(); if (!h.includes(s)) return false; }
+    if (filters.category !== 'all' && t.category !== filters.category) return false;
+    if (filters.poc !== 'all' && t.poc !== filters.poc) return false;
+    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
+    if (filters.status !== 'all' && t.status !== filters.status) return false;
+    if (filters.tag !== 'all' && !(t.tags||[]).includes(filters.tag)) return false;
+    return true;
+  }), [tasks, search, filters]);
+
+  const grouped = useMemo(() => {
+    const g = {};
+    if (groupBy === 'section') { SECTIONS.forEach(s => g[s]=[]); filtered.forEach(t => (g[t.section]=g[t.section]||[]).push(t)); }
+    else if (groupBy === 'priority') { PRIORITIES.forEach(p => g[p]=[]); filtered.forEach(t => (g[t.priority]=g[t.priority]||[]).push(t)); }
+    else if (groupBy === 'category') { filtered.forEach(t => { const k=t.category||'(none)'; (g[k]=g[k]||[]).push(t); }); }
+    else if (groupBy === 'poc') { filtered.forEach(t => { const k=t.poc||'(unassigned)'; (g[k]=g[k]||[]).push(t); }); }
+    else if (groupBy === 'tag') { filtered.forEach(t => { if(!(t.tags||[]).length) (g['(untagged)']=g['(untagged)']||[]).push(t); else t.tags.forEach(tag => (g[tag]=g[tag]||[]).push(t)); }); }
+    else if (groupBy === 'followup') {
+      const now = new Date(); now.setHours(0,0,0,0);
+      g['Overdue']=[]; g['Next 7 days']=[]; g['Later']=[];
+      filtered.forEach(t => { if(!t.followUpDate) return; const d=new Date(t.followUpDate); const diff=(d-now)/864e5; if(diff<0) g['Overdue'].push(t); else if(diff<=7) g['Next 7 days'].push(t); else g['Later'].push(t); });
+      ['Overdue','Next 7 days','Later'].forEach(k => g[k].sort((a,b)=>new Date(a.followUpDate)-new Date(b.followUpDate)));
+    }
+    return g;
+  }, [filtered, groupBy]);
+
+  const sortGroup = arr => [...arr].sort((a,b) => {
+    const pa=PRIORITIES.indexOf(a.priority), pb=PRIORITIES.indexOf(b.priority);
+    if(pa!==pb) return pa-pb;
+    const ca=a.status==='Complete'?1:0, cb=b.status==='Complete'?1:0;
+    if(ca!==cb) return ca-cb;
+    return (b.updatedAt||0)-(a.updatedAt||0);
+  });
+
+  const stats = useMemo(() => ({
+    today: tasks.filter(t => t.section==='TODAY' && t.status!=='Complete').length,
+    todo: tasks.filter(t => t.section==='TO DO' && t.status!=='Complete').length,
+    track: tasks.filter(t => t.section==='TO TRACK' && t.status!=='Complete').length,
+    overdue: tasks.filter(t => t.followUpDate && new Date(t.followUpDate)<new Date() && t.status!=='Complete').length,
+  }), [tasks]);
+
+  // Handlers
+  const addTask = (ov={}) => { const t=expandTask({...ov, id:uid()}); setTasks(p=>[t,...p]); setExpandedId(t.id); };
+  const updateTask = (id, u) => setTasks(p => p.map(t => t.id===id ? {...t,...u,updatedAt:Date.now()} : t));
+  const deleteTask = id => { setTasks(p => p.filter(t => t.id!==id)); if(expandedId===id) setExpandedId(null); };
+
+  const exportCSV = () => {
+    const h=['Section','Category','Item','Detail','POC','Linked Contact','Start Date','End Date','Follow-up Date','Priority','Status','Tags','Notes'];
+    const rows=tasks.map(t=>[t.section,t.category,t.item,t.detail,t.poc,t.linkedContact,t.startDate,t.endDate,t.followUpDate,t.priority,t.status,(t.tags||[]).join('; '),t.notes]);
+    const csv=[h,...rows].map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`tasks-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
+
+  const importCSV = async e => {
+    const f=e.target.files[0]; if(!f) return;
+    try {
+      const txt=await f.text(); const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+      if(lines.length<2) return;
+      const parseRow = l => { const r=[]; let c='',q=false; for(let i=0;i<l.length;i++){const ch=l[i]; if(ch==='"'){if(q&&l[i+1]==='"'){c+='"';i++}else q=!q} else if(ch===','&&!q){r.push(c);c=''}else c+=ch} r.push(c); return r; };
+      const hdr=parseRow(lines[0]).map(h=>h.toLowerCase().trim());
+      const fi=o=>hdr.findIndex(h=>o.some(k=>h.includes(k)));
+      const idx={section:fi(['section']),category:fi(['category']),item:fi(['item','task','title']),detail:fi(['detail','desc']),poc:fi(['poc','owner','assigned']),linkedContact:fi(['linked contact','contact']),startDate:fi(['start']),endDate:fi(['end','due']),followUpDate:fi(['follow']),priority:fi(['priority']),status:fi(['status']),tags:fi(['tags','tag']),notes:fi(['notes','comment'])};
+      const nw=[];
+      for(let i=1;i<lines.length;i++){
+        const r=parseRow(lines[i]); if(r.every(c=>!c.trim())) continue;
+        const g=k=>idx[k]>=0?(r[idx[k]]||'').trim():'';
+        let pri=g('priority')||'2 - Med'; if(/high/i.test(pri)||pri==='1') pri='1 - High'; else if(/med/i.test(pri)||pri==='2') pri='2 - Med'; else if(/low/i.test(pri)||pri==='3') pri='3 - Low';
+        let sec=(g('section')||'TO DO').toUpperCase(); if(!SECTIONS.includes(sec)) sec='TO DO';
+        nw.push(expandTask({id:uid(),section:sec,category:g('category'),item:g('item'),detail:g('detail'),poc:g('poc'),linkedContact:g('linkedContact'),startDate:g('startDate'),endDate:g('endDate'),followUpDate:g('followUpDate'),priority:pri,status:g('status')||'In Process',tags:g('tags')?g('tags').split(/[;,]/).map(t=>t.trim()).filter(Boolean):[],notes:g('notes')}));
+      }
+      if(nw.length) setTasks(p=>[...nw,...p]);
+    } catch(err) { alert('CSV parse error: '+err.message); }
+    e.target.value='';
+  };
+
+  const importJSON = async e => {
+    const f=e.target.files[0]; if(!f) return;
+    try {
+      const data=JSON.parse(await f.text());
+      const ts=(data.tasks||data).map(t=>expandTask(t));
+      if(ts.length) setTasks(p=>[...ts,...p]);
+    } catch(err) { alert('JSON parse error: '+err.message); }
+    e.target.value='';
+  };
+
+  if (loading) return html`<div class="min-h-screen flex items-center justify-center"><div class="text-sm opacity-60">Loading...</div></div>`;
+
+  const dk = dark;
+  const cBg = dk ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200';
+
+  return html`
+    <div class="min-h-screen transition-colors">
+      <!-- Header -->
+      <div class="sticky top-0 z-30 border-b ${dk?'border-slate-800 bg-slate-900/95':'border-stone-200 bg-white/95'} backdrop-blur">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3">
+          <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div class="flex items-center gap-2">
+              <${Icons.layers} />
+              <h1 class="text-lg font-semibold tracking-tight">Tracker</h1>
+            </div>
+            <div class="flex items-center gap-1.5 ml-1 text-xs">
+              <span class="px-2 py-0.5 rounded-full ${dk?'bg-slate-800':'bg-stone-100'}">${stats.today} today</span>
+              <span class="px-2 py-0.5 rounded-full ${dk?'bg-slate-800':'bg-stone-100'}">${stats.todo} to do</span>
+              ${stats.overdue>0 && html`<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 flex items-center gap-1"><${Icons.alert} />${stats.overdue} overdue</span>`}
+            </div>
+            <div class="flex-1" />
+            <!-- Sync -->
+            <button onClick=${syncNow} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'} relative" title=${lastSync?'Last sync: '+lastSync.toLocaleTimeString():'Sync'}>
+              <span class="${syncStatus==='syncing'?'spin':''}"><${Icons.sync} /></span>
+              ${syncStatus==='synced' && html`<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500"></span>`}
+              ${syncStatus==='error' && html`<span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500"></span>`}
+            </button>
+            <div class="relative hidden sm:block">
+              <span class="absolute left-2.5 top-1/2 -translate-y-1/2"><${Icons.search} /></span>
+              <input value=${search} onInput=${e=>setSearch(e.target.value)} placeholder="Search..." class="pl-8 pr-3 py-1.5 rounded-md text-sm w-44 border ${dk?'bg-slate-800 border-slate-700':'bg-stone-100 border-stone-200'} focus:outline-none focus:ring-1 ${dk?'focus:ring-slate-500':'focus:ring-stone-400'}" />
+            </div>
+            <button onClick=${()=>setShowFilters(s=>!s)} class="p-1.5 rounded-md ${showFilters?(dk?'bg-slate-700':'bg-stone-200'):''} ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}" title="Filters"><${Icons.filter} /></button>
+            <button onClick=${exportCSV} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'} hidden sm:block" title="Export CSV"><${Icons.download} /></button>
+            <button onClick=${()=>setModal('settings')} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}" title="Settings"><${Icons.settings} /></button>
+            <button onClick=${()=>setDark(d=>!d)} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}" title="Theme">${dk?html`<${Icons.sun} />`:html`<${Icons.moon} />`}</button>
+          </div>
+          <!-- Mobile search -->
+          <div class="sm:hidden mt-2 relative">
+            <span class="absolute left-2.5 top-1/2 -translate-y-1/2"><${Icons.search} /></span>
+            <input value=${search} onInput=${e=>setSearch(e.target.value)} placeholder="Search..." class="w-full pl-8 pr-3 py-1.5 rounded-md text-sm border ${dk?'bg-slate-800 border-slate-700':'bg-stone-100 border-stone-200'} focus:outline-none" />
+          </div>
+          <!-- Quick add + group -->
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
+            <div class="flex-1 flex items-center gap-2 min-w-[200px]">
+              <span class="opacity-40 ml-1"><${Icons.plus} /></span>
+              <input value=${quickAdd} onInput=${e=>setQuickAdd(e.target.value)} onKeyDown=${e=>{if(e.key==='Enter'&&quickAdd.trim()){addTask({item:quickAdd.trim(),section:'TODAY'});setQuickAdd('')}}} placeholder="Add to TODAY..." class="flex-1 px-2 py-1.5 rounded-md text-sm border bg-transparent ${dk?'border-slate-700 placeholder:text-slate-500':'border-stone-200 placeholder:text-stone-400'} focus:outline-none focus:ring-1 ${dk?'focus:ring-slate-500':'focus:ring-stone-400'}" />
+            </div>
+            <div class="flex items-center gap-1 text-xs flex-wrap">
+              <span class="opacity-50 mr-0.5 hidden sm:inline">Group:</span>
+              ${GROUP_OPTIONS.map(o => html`<button key=${o.v} onClick=${()=>setGroupBy(o.v)} class="px-2 py-1 rounded-md ${groupBy===o.v?(dk?'bg-slate-700 text-slate-100':'bg-slate-900 text-white'):(dk?'hover:bg-slate-800':'hover:bg-stone-100')}">${o.l}</button>`)}
+            </div>
+          </div>
+          <!-- Filters -->
+          ${showFilters && html`
+            <div class="mt-2 p-2.5 rounded-md border ${dk?'bg-slate-800 border-slate-700':'bg-stone-100 border-stone-200'} flex flex-wrap items-center gap-2 text-xs">
+              <${Sel} dk=${dk} label="Category" value=${filters.category} onChange=${v=>setFilters(f=>({...f,category:v}))} options=${['all',...allCats]} />
+              <${Sel} dk=${dk} label="POC" value=${filters.poc} onChange=${v=>setFilters(f=>({...f,poc:v}))} options=${['all',...allPocs]} />
+              <${Sel} dk=${dk} label="Priority" value=${filters.priority} onChange=${v=>setFilters(f=>({...f,priority:v}))} options=${['all',...PRIORITIES]} />
+              <${Sel} dk=${dk} label="Status" value=${filters.status} onChange=${v=>setFilters(f=>({...f,status:v}))} options=${['all',...STATUSES]} />
+              ${allTags.length>0 && html`<${Sel} dk=${dk} label="Tag" value=${filters.tag} onChange=${v=>setFilters(f=>({...f,tag:v}))} options=${['all',...allTags]} />`}
+              ${Object.values(filters).some(v=>v!=='all') && html`<button onClick=${()=>setFilters({category:'all',poc:'all',priority:'all',status:'all',tag:'all'})} class="px-2 py-1 rounded-md hover:underline opacity-70">Clear</button>`}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        ${Object.entries(grouped).map(([gn, items]) => {
+          if ((groupBy==='followup'||groupBy==='tag') && items.length===0) return null;
+          const sorted = sortGroup(items);
+          const isC = collapsed[gn];
+          return html`
+            <div key=${gn} class="mb-4">
+              <button onClick=${()=>setCollapsed(p=>({...p,[gn]:!p[gn]}))} class="flex items-center gap-1.5 mb-1.5 text-xs font-semibold tracking-wider uppercase opacity-70 hover:opacity-100">
+                ${isC?html`<${Icons.chevRight} />`:html`<${Icons.chevDown} />`}
+                <span>${gn}</span>
+                <span class="opacity-60 font-normal normal-case tracking-normal">${items.length}</span>
+              </button>
+              ${!isC && html`
+                <div class="rounded-lg border overflow-hidden ${cBg}">
+                  ${sorted.length===0 ? html`<div class="px-4 py-5 text-sm opacity-40 text-center italic">No tasks</div>` :
+                    sorted.map((t,i) => html`<${Row} key=${t.id} task=${t} dk=${dk} expanded=${expandedId===t.id} onToggle=${()=>setExpandedId(expandedId===t.id?null:t.id)} onUpdate=${u=>updateTask(t.id,u)} onDelete=${()=>deleteTask(t.id)} cats=${allCats} pocsList=${allPocs} contacts=${allContacts} tagsList=${allTags} last=${i===sorted.length-1} />`)}
+                </div>
+              `}
+            </div>
+          `;
+        })}
+        ${filtered.length===0 && html`<div class="mt-12 text-center text-sm opacity-50 p-12 rounded-lg border-2 border-dashed ${dk?'border-slate-700':'border-stone-200'}">${tasks.length===0?'No tasks yet.':'No tasks match filters.'}</div>`}
+        <button onClick=${()=>addTask()} class="mt-4 w-full py-2.5 rounded-lg border-2 border-dashed text-sm flex items-center justify-center gap-2 ${dk?'border-slate-700 hover:border-slate-600 hover:bg-slate-800/50 text-slate-400':'border-stone-300 hover:border-stone-400 hover:bg-white text-stone-500'}"><${Icons.plus} /> New task</button>
+      </div>
+
+      ${modal==='settings' && html`<${Settings} dk=${dk} categories=${categories} setCategories=${setCategories} pocs=${pocs} setPocs=${setPocs} tasks=${tasks} setTasks=${setTasks} onClose=${()=>setModal(null)} fileRef=${fileRef} importCSV=${importCSV} importJSON=${importJSON} gistCfg=${Gist.cfg()} onSetupSync=${()=>setModal('sync')} onDisconnectSync=${()=>{Gist.clearCfg();setSyncStatus('idle');setLastSync(null)}} />`}
+      ${modal==='sync' && html`<${SyncSetup} dk=${dk} onClose=${()=>setModal('settings')} onConnected=${async(token,gistId)=>{Gist.setCfg({token,gistId});setModal(null);await syncNow()}} tasks=${tasks} meta=${{dark,categories,pocs,groupBy}} />`}
+      <input ref=${fileRef} type="file" accept=".csv,.json" onChange=${e=>{const f=e.target.files[0]; if(f?.name.endsWith('.json')) importJSON(e); else importCSV(e);}} class="hidden" />
+    </div>
+  `;
+}
+
+// ── Small Components ──
+function Sel({ dk, label, value, onChange, options }) {
+  return html`<label class="flex items-center gap-1"><span class="opacity-60">${label}:</span><select value=${value} onChange=${e=>onChange(e.target.value)} class="px-2 py-1 rounded-md border text-xs ${dk?'bg-slate-800 border-slate-700':'bg-white border-stone-200'}">${options.map(o=>html`<option key=${o} value=${o}>${o==='all'?'All':o}</option>`)}</select></label>`;
+}
+
+function Row({ task: t, dk, expanded, onToggle, onUpdate, onDelete, cats, pocsList, contacts, tagsList, last }) {
+  const done = t.status === 'Complete';
+  const overdue = t.followUpDate && new Date(t.followUpDate) < new Date() && !done;
+  return html`
+    <div class="${!last?`border-b ${dk?'border-slate-700/50':'border-stone-100'}`:''} ${done?'opacity-50':''}">
+      <div onClick=${onToggle} class="flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 cursor-pointer ${dk?'hover:bg-slate-800/40':'hover:bg-stone-50'} transition-colors">
+        <div class="flex items-center gap-1.5 pt-0.5 flex-shrink-0">
+          <button onClick=${e=>{e.stopPropagation();onUpdate({status:done?'In Process':'Complete',section:done?'TO DO':'COMPLETE'})}} class="w-4 h-4 rounded-full border-2 flex items-center justify-center ${done?'bg-emerald-500 border-emerald-500':(dk?'border-slate-500 hover:border-emerald-400':'border-stone-300 hover:border-emerald-500')}" title=${done?'Reopen':'Complete'}>
+            ${done && html`<span class="text-white text-[10px]"><${Icons.check} /></span>`}
+          </button>
+          <div class="w-1.5 h-1.5 rounded-full ${PRI_COLORS[t.priority]||'bg-stone-400'}" title=${t.priority}></div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-sm font-medium ${done?'line-through':''}">${t.item || html`<span class="opacity-40 italic">Untitled</span>`}</span>
+            ${t.category && html`<span class="text-[10px] px-1.5 py-0.5 rounded ${dk?'bg-slate-700/60 text-slate-300':'bg-stone-100 text-stone-600'}">${t.category}</span>`}
+            ${(t.tags||[]).map(tag => html`<span key=${tag} class="text-[10px] px-1.5 py-0.5 rounded hidden sm:flex items-center gap-0.5 ${dk?'bg-indigo-900/40 text-indigo-300':'bg-indigo-50 text-indigo-700'}"><${Icons.tag} />${tag}</span>`)}
+            ${overdue && html`<span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 flex items-center gap-0.5"><${Icons.alert} />Overdue</span>`}
+          </div>
+          ${t.detail && html`<div class="text-xs mt-0.5 ${dk?'text-slate-400':'text-stone-500'} truncate">${t.detail}</div>`}
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3 text-xs flex-shrink-0">
+          ${t.linkedContact && html`<span class="hidden sm:inline ${dk?'text-indigo-300':'text-indigo-600'}">↳ ${t.linkedContact}</span>`}
+          ${t.poc && html`<span class="${dk?'text-slate-400':'text-stone-500'}">@${t.poc}</span>`}
+          ${t.followUpDate && html`<span class="hidden sm:flex items-center gap-1 ${overdue?'text-rose-500':(dk?'text-slate-400':'text-stone-500')}"><${Icons.cal} />${fmtDate(t.followUpDate)}</span>`}
+          <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full ${STA_COLORS[t.status]||'bg-stone-400'}"></span><span class="hidden sm:inline ${dk?'text-slate-400':'text-stone-500'}">${t.status}</span></span>
+        </div>
+      </div>
+      ${expanded && html`<${Editor} task=${t} dk=${dk} cats=${cats} pocsList=${pocsList} contacts=${contacts} tagsList=${tagsList} onUpdate=${onUpdate} onDelete=${onDelete} />`}
+    </div>
+  `;
+}
+
+function Editor({ task: t, dk, cats, pocsList, contacts, tagsList, onUpdate, onDelete }) {
+  const [confirmDel, setConfirmDel] = useState(false);
+  const fl = `text-[11px] uppercase tracking-wider ${dk?'text-slate-400':'text-stone-500'} font-medium mb-1`;
+  const ip = `w-full px-2.5 py-1.5 rounded-md text-sm border ${dk?'bg-slate-800 border-slate-700 focus:border-slate-500':'bg-white border-stone-200 focus:border-stone-400'} focus:outline-none`;
+  return html`
+    <div class="px-3 sm:px-4 py-4 ${dk?'bg-slate-800/30 border-t border-slate-700/50':'bg-stone-50/70 border-t border-stone-100'}">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2"><div class=${fl}>Item</div><input class=${ip} value=${t.item} onInput=${e=>onUpdate({item:e.target.value})} /></div>
+        <div class="sm:col-span-2"><div class=${fl}>Detail</div><textarea class="${ip} resize-none" rows=2 value=${t.detail} onInput=${e=>onUpdate({detail:e.target.value})}></textarea></div>
+        <div><div class=${fl}>Section</div><select class=${ip} value=${t.section} onChange=${e=>onUpdate({section:e.target.value})}>${SECTIONS.map(s=>html`<option key=${s} value=${s}>${s}</option>`)}</select></div>
+        <div><div class=${fl}>Category</div><input list="dl-cat" class=${ip} value=${t.category} onInput=${e=>onUpdate({category:e.target.value})} placeholder="Type or pick..." /><datalist id="dl-cat">${cats.map(c=>html`<option key=${c} value=${c} />`)}</datalist></div>
+        <div><div class=${fl}>POC</div><input list="dl-poc" class=${ip} value=${t.poc} onInput=${e=>onUpdate({poc:e.target.value})} placeholder="Internal owner" /><datalist id="dl-poc">${pocsList.map(p=>html`<option key=${p} value=${p} />`)}</datalist></div>
+        <div><div class=${fl}>Linked Contact</div><input list="dl-con" class=${ip} value=${t.linkedContact} onInput=${e=>onUpdate({linkedContact:e.target.value})} placeholder="External contact" /><datalist id="dl-con">${contacts.map(c=>html`<option key=${c} value=${c} />`)}</datalist></div>
+        <div><div class=${fl}>Priority</div><select class=${ip} value=${t.priority} onChange=${e=>onUpdate({priority:e.target.value})}>${PRIORITIES.map(p=>html`<option key=${p} value=${p}>${p}</option>`)}</select></div>
+        <div><div class=${fl}>Status</div><select class=${ip} value=${t.status} onChange=${e=>onUpdate({status:e.target.value})}>${STATUSES.map(s=>html`<option key=${s} value=${s}>${s}</option>`)}</select></div>
+        <div><div class=${fl}>Start Date</div><input type="date" class=${ip} value=${t.startDate} onChange=${e=>onUpdate({startDate:e.target.value})} /></div>
+        <div><div class=${fl}>End Date</div><input type="date" class=${ip} value=${t.endDate} onChange=${e=>onUpdate({endDate:e.target.value})} /></div>
+        <div><div class=${fl}>Follow-up Date</div><input type="date" class=${ip} value=${t.followUpDate} onChange=${e=>onUpdate({followUpDate:e.target.value})} /></div>
+        <div class="sm:col-span-2">
+          <div class=${fl}>Tags <span class="opacity-50 normal-case">(comma-separated)</span></div>
+          <input class=${ip} value=${(t.tags||[]).join(', ')} onBlur=${e=>onUpdate({tags:parseTags(e.target.value)})} placeholder="e.g. Canton Fair Apr-26, Tencent" />
+          ${tagsList.length>0 && html`<div class="flex flex-wrap gap-1 mt-1.5">${tagsList.filter(tag=>!(t.tags||[]).includes(tag)).slice(0,12).map(tag=>html`<button key=${tag} onClick=${()=>onUpdate({tags:[...(t.tags||[]),tag]})} class="text-[10px] px-1.5 py-0.5 rounded ${dk?'bg-slate-700 hover:bg-slate-600 text-slate-300':'bg-stone-200 hover:bg-stone-300 text-stone-600'}">+ ${tag}</button>`)}</div>`}
+        </div>
+        <div class="sm:col-span-2"><div class=${fl}>Notes</div><textarea class="${ip} resize-none" rows=3 value=${t.notes} onInput=${e=>onUpdate({notes:e.target.value})} placeholder="Updates, context, links..."></textarea></div>
+      </div>
+      <div class="flex items-center justify-between mt-4 pt-3 border-t border-dashed text-xs opacity-60 ${dk?'border-slate-700':'border-stone-300'}">
+        <div>Updated ${new Date(t.updatedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        ${!confirmDel ? html`<button onClick=${()=>setConfirmDel(true)} class="flex items-center gap-1 px-2 py-1 rounded hover:bg-rose-500/10 hover:text-rose-500"><${Icons.trash} /> Delete</button>`
+        : html`<div class="flex items-center gap-2"><span class="text-rose-500">Delete?</span><button onClick=${onDelete} class="px-2 py-1 rounded bg-rose-500 text-white hover:bg-rose-600">Yes</button><button onClick=${()=>setConfirmDel(false)} class="px-2 py-1 rounded border ${dk?'border-slate-600':'border-stone-300'}">Cancel</button></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTasks, onClose, fileRef, importCSV, importJSON, gistCfg, onSetupSync, onDisconnectSync }) {
+  const [newCat, setNewCat] = useState('');
+  const [newPoc, setNewPoc] = useState('');
+  const [tab, setTab] = useState('general');
+  const card = dk ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200';
+  const ip = `w-full px-2.5 py-1.5 rounded-md text-sm border ${dk?'bg-slate-800 border-slate-700':'bg-stone-50 border-stone-200'} focus:outline-none`;
+  const usedCats = useMemo(() => new Set(tasks.map(t=>t.category).filter(Boolean)), [tasks]);
+  const usedPocs = useMemo(() => new Set(tasks.map(t=>t.poc).filter(Boolean)), [tasks]);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  return html`
+    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick=${onClose}>
+      <div class="w-full sm:max-w-lg sm:rounded-lg rounded-t-2xl max-h-[85vh] overflow-y-auto border shadow-xl ${card}" onClick=${e=>e.stopPropagation()}>
+        <div class="flex items-center justify-between px-5 py-3 border-b ${dk?'border-slate-700':'border-stone-200'}">
+          <h2 class="font-medium">Settings</h2>
+          <button onClick=${onClose} class="p-1 rounded ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}"><${Icons.x} /></button>
+        </div>
+        <!-- Tabs -->
+        <div class="flex border-b ${dk?'border-slate-700':'border-stone-200'} text-xs">
+          ${['general','lists','data'].map(t => html`<button key=${t} onClick=${()=>setTab(t)} class="flex-1 py-2 capitalize ${tab===t?(dk?'border-b-2 border-slate-300':'border-b-2 border-slate-900 font-medium'):'opacity-50'}">${t}</button>`)}
+        </div>
+        <div class="p-5 space-y-4">
+          ${tab==='general' && html`
+            <div>
+              <h3 class="text-sm font-medium mb-2">Cloud Sync</h3>
+              ${gistCfg ? html`
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>Connected to GitHub Gist</span>
+                  <button onClick=${onDisconnectSync} class="ml-auto text-rose-500 hover:underline">Disconnect</button>
+                </div>
+              ` : html`
+                <button onClick=${onSetupSync} class="w-full py-2 rounded-md text-sm flex items-center justify-center gap-2 ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}"><${Icons.cloud} /> Connect GitHub Gist</button>
+                <div class="text-[11px] opacity-50 mt-1">Sync tasks across all your devices</div>
+              `}
+            </div>
+          `}
+          ${tab==='lists' && html`
+            <div>
+              <h3 class="text-sm font-medium mb-2">Categories</h3>
+              <div class="flex gap-2 mb-2">
+                <input class=${ip} value=${newCat} onInput=${e=>setNewCat(e.target.value)} placeholder="Add..." onKeyDown=${e=>{if(e.key==='Enter'&&newCat.trim()){setCategories(c=>[...c,newCat.trim()]);setNewCat('')}}} />
+                <button onClick=${()=>{if(newCat.trim()){setCategories(c=>[...c,newCat.trim()]);setNewCat('')}}} class="px-3 py-1.5 rounded-md text-sm ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}">Add</button>
+              </div>
+              <div class="flex flex-wrap gap-1.5">${categories.map(c=>html`<span key=${c} class="text-xs px-2 py-1 rounded-md flex items-center gap-1 ${dk?'bg-slate-800':'bg-stone-100'}">${c}${!usedCats.has(c)&&html`<button onClick=${()=>setCategories(cats=>cats.filter(x=>x!==c))} class="opacity-50 hover:opacity-100"><${Icons.x} /></button>`}</span>`)}</div>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium mb-2">POCs</h3>
+              <div class="flex gap-2 mb-2">
+                <input class=${ip} value=${newPoc} onInput=${e=>setNewPoc(e.target.value)} placeholder="Add..." onKeyDown=${e=>{if(e.key==='Enter'&&newPoc.trim()){setPocs(p=>[...p,newPoc.trim()]);setNewPoc('')}}} />
+                <button onClick=${()=>{if(newPoc.trim()){setPocs(p=>[...p,newPoc.trim()]);setNewPoc('')}}} class="px-3 py-1.5 rounded-md text-sm ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}">Add</button>
+              </div>
+              <div class="flex flex-wrap gap-1.5">${pocs.map(p=>html`<span key=${p} class="text-xs px-2 py-1 rounded-md flex items-center gap-1 ${dk?'bg-slate-800':'bg-stone-100'}">${p}${!usedPocs.has(p)&&html`<button onClick=${()=>setPocs(ps=>ps.filter(x=>x!==p))} class="opacity-50 hover:opacity-100"><${Icons.x} /></button>`}</span>`)}</div>
+            </div>
+          `}
+          ${tab==='data' && html`
+            <div class="space-y-3">
+              <div>
+                <h3 class="text-sm font-medium mb-2">Import / Export</h3>
+                <div class="flex flex-wrap gap-2">
+                  <button onClick=${()=>fileRef.current?.click()} class="px-3 py-1.5 rounded-md text-sm border flex items-center gap-1.5 ${dk?'border-slate-700 hover:bg-slate-800':'border-stone-200 hover:bg-stone-50'}"><${Icons.upload} /> Import CSV / JSON</button>
+                  <button onClick=${()=>{const d={tasks,meta:{categories,pocs}};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.download='tracker-backup.json';a.click()}} class="px-3 py-1.5 rounded-md text-sm border flex items-center gap-1.5 ${dk?'border-slate-700 hover:bg-slate-800':'border-stone-200 hover:bg-stone-50'}"><${Icons.download} /> Export JSON</button>
+                </div>
+              </div>
+              <div class="pt-3 border-t ${dk?'border-slate-700':'border-stone-200'}">
+                <h3 class="text-sm font-medium mb-2">Reset</h3>
+                ${!confirmReset ? html`<button onClick=${()=>setConfirmReset(true)} class="text-xs text-rose-500 hover:underline">Clear all tasks...</button>`
+                : html`<div class="flex items-center gap-2"><span class="text-xs">Delete everything?</span><button onClick=${()=>{setTasks([]);localStorage.removeItem(LS_KEY);setConfirmReset(false);onClose()}} class="text-xs px-2 py-1 rounded bg-rose-500 text-white">Yes</button><button onClick=${()=>setConfirmReset(false)} class="text-xs px-2 py-1 rounded border ${dk?'border-slate-600':'border-stone-300'}">Cancel</button></div>`}
+              </div>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function SyncSetup({ dk, onClose, onConnected, tasks, meta }) {
+  const [step, setStep] = useState(1);
+  const [token, setToken] = useState('');
+  const [gistId, setGistId] = useState('');
+  const [mode, setMode] = useState('new'); // new | existing
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [user, setUser] = useState('');
+  const card = dk ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200';
+  const ip = `w-full px-2.5 py-2 rounded-md text-sm border ${dk?'bg-slate-800 border-slate-700':'bg-stone-50 border-stone-200'} focus:outline-none`;
+  const btn = `w-full py-2 rounded-md text-sm font-medium ${dk?'bg-slate-200 text-slate-900 hover:bg-white':'bg-slate-900 text-white hover:bg-slate-800'}`;
+
+  const verifyToken = async () => {
+    setError(''); setStatus('Verifying...');
+    try {
+      const login = await Gist.test(token.trim());
+      setUser(login); setStep(2); setStatus('');
+    } catch(e) { setError('Invalid token. Check scopes (needs "gist").'); setStatus(''); }
+  };
+
+  const connect = async () => {
+    setError(''); setStatus('Connecting...');
+    try {
+      let id = gistId.trim();
+      if (mode === 'new') {
+        id = await Gist.create(token.trim());
+        // Push current data to new gist
+        Gist.setCfg({ token: token.trim(), gistId: id });
+        await Gist.save({ tasks, meta });
+      }
+      if (!id) { setError('Enter a Gist ID'); setStatus(''); return; }
+      onConnected(token.trim(), id);
+    } catch(e) { setError(e.message); setStatus(''); }
+  };
+
+  return html`
+    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick=${onClose}>
+      <div class="w-full sm:max-w-md sm:rounded-lg rounded-t-2xl max-h-[85vh] overflow-y-auto border shadow-xl ${card}" onClick=${e=>e.stopPropagation()}>
+        <div class="flex items-center justify-between px-5 py-3 border-b ${dk?'border-slate-700':'border-stone-200'}">
+          <h2 class="font-medium flex items-center gap-2"><${Icons.cloud} /> Connect Gist</h2>
+          <button onClick=${onClose} class="p-1 rounded ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}"><${Icons.x} /></button>
+        </div>
+        <div class="p-5 space-y-4">
+          ${step===1 && html`
+            <div>
+              <div class="text-sm mb-3">Paste a GitHub personal access token with <code class="text-xs px-1 py-0.5 rounded ${dk?'bg-slate-800':'bg-stone-100'}">gist</code> scope.</div>
+              <div class="text-xs opacity-60 mb-3">GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic) > Generate new token > check "gist"</div>
+              <input class=${ip} type="password" value=${token} onInput=${e=>setToken(e.target.value)} placeholder="ghp_..." onKeyDown=${e=>e.key==='Enter'&&verifyToken()} />
+              ${error && html`<div class="text-xs text-rose-500 mt-2">${error}</div>`}
+              ${status && html`<div class="text-xs opacity-60 mt-2">${status}</div>`}
+              <button onClick=${verifyToken} disabled=${!token.trim()} class="${btn} mt-3 disabled:opacity-40">Verify token</button>
+            </div>
+          `}
+          ${step===2 && html`
+            <div>
+              <div class="text-sm mb-3">Logged in as <span class="font-medium">${user}</span></div>
+              <div class="flex gap-2 mb-3">
+                <button onClick=${()=>setMode('new')} class="flex-1 py-2 rounded-md text-sm border ${mode==='new'?(dk?'border-slate-400 bg-slate-800':'border-slate-900 bg-slate-50'):(dk?'border-slate-700':'border-stone-200')}">${'New gist'}</button>
+                <button onClick=${()=>setMode('existing')} class="flex-1 py-2 rounded-md text-sm border ${mode==='existing'?(dk?'border-slate-400 bg-slate-800':'border-slate-900 bg-slate-50'):(dk?'border-slate-700':'border-stone-200')}">Existing gist</button>
+              </div>
+              ${mode==='new' && html`<div class="text-xs opacity-60">Creates a private gist with your current tasks.</div>`}
+              ${mode==='existing' && html`
+                <div>
+                  <div class="text-xs opacity-60 mb-2">Paste the Gist ID (from the URL: gist.github.com/user/<b>ID</b>)</div>
+                  <input class=${ip} value=${gistId} onInput=${e=>setGistId(e.target.value)} placeholder="abc123def456..." />
+                </div>
+              `}
+              ${error && html`<div class="text-xs text-rose-500 mt-2">${error}</div>`}
+              ${status && html`<div class="text-xs opacity-60 mt-2">${status}</div>`}
+              <button onClick=${connect} class="${btn} mt-3">Connect</button>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+render(html`<${App} />`, document.getElementById('app'));
+</script>
+</body>
+</html>
