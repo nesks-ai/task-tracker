@@ -73,6 +73,10 @@ const STA_COLORS = { 'In Process': 'bg-blue-500', Pending: 'bg-amber-500', Block
 
 const LS_KEY = 'tracker_data_v1';
 const GIST_KEY = 'tracker_gist_config';
+const STORE_KEY = 'tracker_store_config';
+// UTF-8-safe base64 (task data contains non-Latin1 chars, e.g. Bangla names)
+const b64encode = str => btoa(unescape(encodeURIComponent(str)));
+const b64decode = b64 => decodeURIComponent(escape(atob((b64||'').replace(/\s/g,''))));
 const uid = () => `t${Date.now()}${Math.random().toString(36).slice(2,7)}`;
 const parseTags = s => !s ? [] : Array.isArray(s) ? s.filter(Boolean).map(t=>t.trim()).filter(Boolean) : s.split(',').map(t=>t.trim()).filter(Boolean);
 const fmtDate = s => { if(!s) return ''; try { return new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); } catch { return s; } };
@@ -96,20 +100,16 @@ const expandTask = (t, i = 0) => ({
   updatedAt: t.updatedAt || Date.now(),
 });
 
-// ── Gist Sync ──
+// ── Backends ──
+// Legacy: GitHub secret gist (anonymously readable — unlisted, not private).
 const Gist = {
-  cfg() { try { return JSON.parse(localStorage.getItem(GIST_KEY)); } catch { return null; } },
-  setCfg(c) { localStorage.setItem(GIST_KEY, JSON.stringify(c)); },
-  clearCfg() { localStorage.removeItem(GIST_KEY); },
-  async load() {
-    const c = this.cfg(); if (!c) return null;
+  async load(c) {
     const r = await fetch(`https://api.github.com/gists/${c.gistId}`, { headers: { Authorization: `Bearer ${c.token}` } });
     if (!r.ok) throw new Error(`Gist load failed: ${r.status}`);
     const g = await r.json();
     return JSON.parse(g.files['tracker.json'].content);
   },
-  async save(data) {
-    const c = this.cfg(); if (!c) return;
+  async save(c, data) {
     const r = await fetch(`https://api.github.com/gists/${c.gistId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${c.token}`, 'Content-Type': 'application/json' },
@@ -117,20 +117,60 @@ const Gist = {
     });
     if (!r.ok) throw new Error(`Gist save failed: ${r.status}`);
   },
-  async create(token) {
-    const r = await fetch('https://api.github.com/gists', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: 'Task Tracker Data', public: false, files: { 'tracker.json': { content: JSON.stringify({ tasks: [], meta: {} }) } } })
-    });
-    if (!r.ok) throw new Error(`Gist create failed: ${r.status}`);
-    return (await r.json()).id;
+};
+
+// Preferred: file in a PRIVATE repo via the Contents API. Reads require the
+// token — an anonymous request returns 404, so the data is genuinely private.
+const Repo = {
+  _sha: undefined,
+  _url(c) { return `https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path.split('/').map(encodeURIComponent).join('/')}`; },
+  _headers(c) { return { Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github+json' }; },
+  async _get(c) {
+    const r = await fetch(this._url(c), { headers: this._headers(c) });
+    if (r.status === 404) return { data: null, sha: null };
+    if (!r.ok) throw new Error(`Repo read failed: ${r.status}`);
+    const j = await r.json();
+    return { data: JSON.parse(b64decode(j.content)), sha: j.sha };
   },
-  async test(token) {
-    const r = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${token}` } });
+  async load(c) { const g = await this._get(c); this._sha = g.sha; return g.data; },
+  async save(c, data) {
+    let sha = this._sha;
+    if (sha === undefined) { const g = await this._get(c); sha = g.sha; }
+    const put = s => fetch(this._url(c), {
+      method: 'PUT', headers: { ...this._headers(c), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `tracker ${new Date().toISOString()}`, content: b64encode(JSON.stringify(data)), ...(s ? { sha: s } : {}) })
+    });
+    let r = await put(sha);
+    if (r.status === 409) { const g = await this._get(c); r = await put(g.sha); } // stale sha → refetch + retry
+    if (!r.ok) throw new Error(`Repo save failed: ${r.status}`);
+    this._sha = (await r.json()).content.sha;
+  },
+  async testToken(token) {
+    const r = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } });
     if (!r.ok) throw new Error('Invalid token');
     return (await r.json()).login;
-  }
+  },
+  async testRepo(c) {
+    const r = await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}`, { headers: this._headers(c) });
+    if (r.status === 404) throw new Error(`Repo not found or token lacks access: ${c.owner}/${c.repo}`);
+    if (!r.ok) throw new Error(`Cannot access repo (${r.status})`);
+    return await r.json();
+  },
+};
+
+// Facade: picks backend from config type; falls back to legacy gist config.
+const Store = {
+  cfg() {
+    try { const c = JSON.parse(localStorage.getItem(STORE_KEY)); if (c && c.type) return c; } catch {}
+    try { const g = JSON.parse(localStorage.getItem(GIST_KEY)); if (g && g.gistId) return { type: 'gist', ...g }; } catch {}
+    return null;
+  },
+  setCfg(c) { localStorage.setItem(STORE_KEY, JSON.stringify(c)); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; },
+  clearCfg() { localStorage.removeItem(STORE_KEY); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; },
+  label() { const c = this.cfg(); return !c ? null : c.type === 'repo' ? 'private repo' : 'secret gist'; },
+  isRepo() { const c = this.cfg(); return !!c && c.type === 'repo'; },
+  async load() { const c = this.cfg(); if (!c) return null; return c.type === 'repo' ? Repo.load(c) : Gist.load(c); },
+  async save(data) { const c = this.cfg(); if (!c) return; return c.type === 'repo' ? Repo.save(c, data) : Gist.save(c, data); },
 };
 
 // ── App ──
@@ -201,16 +241,16 @@ function App() {
   useEffect(() => {
     (async () => {
       let data = null;
-      // Try gist first
-      const gc = Gist.cfg();
+      // Try cloud store first (private repo or legacy gist)
+      const gc = Store.cfg();
       if (gc) {
         try {
           setSyncStatus('syncing');
-          data = await Gist.load();
+          data = await Store.load();
           setSyncStatus('synced');
           setLastSync(new Date());
         } catch(e) {
-          console.warn('Gist load failed, falling back to local', e);
+          console.warn('Cloud load failed, falling back to local', e);
           setSyncStatus('error');
         }
       }
@@ -239,14 +279,14 @@ function App() {
     localStorage.setItem(LS_KEY, JSON.stringify(data));
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      if (Gist.cfg()) {
+      if (Store.cfg()) {
         try {
           setSyncStatus('syncing');
-          await Gist.save(data);
+          await Store.save(data);
           setSyncStatus('synced');
           setLastSync(new Date());
         } catch(e) {
-          console.warn('Gist save failed', e);
+          console.warn('Cloud save failed', e);
           setSyncStatus('error');
         }
       }
@@ -259,10 +299,10 @@ function App() {
   }, [tasks, dark, categories, pocs, groupBy, loading]);
 
   const syncNow = useCallback(async () => {
-    if (!Gist.cfg()) return;
+    if (!Store.cfg()) return;
     try {
       setSyncStatus('syncing');
-      const data = await Gist.load();
+      const data = await Store.load();
       if (data && data.tasks) {
         setTasks(data.tasks.map(t => expandTask(t)));
         if (data.meta) {
@@ -465,8 +505,8 @@ function App() {
         <button onClick=${()=>addTask()} class="mt-4 w-full py-2.5 rounded-lg border-2 border-dashed text-sm flex items-center justify-center gap-2 ${dk?'border-slate-700 hover:border-slate-600 hover:bg-slate-800/50 text-slate-400':'border-stone-300 hover:border-stone-400 hover:bg-white text-stone-500'}"><${Icons.plus} /> New task</button>
       </div>
 
-      ${modal==='settings' && html`<${Settings} dk=${dk} categories=${categories} setCategories=${setCategories} pocs=${pocs} setPocs=${setPocs} tasks=${tasks} setTasks=${setTasks} onClearAll=${clearAll} onClose=${()=>setModal(null)} fileRef=${fileRef} importCSV=${importCSV} importJSON=${importJSON} gistCfg=${Gist.cfg()} onSetupSync=${()=>setModal('sync')} onDisconnectSync=${()=>{Gist.clearCfg();setSyncStatus('idle');setLastSync(null)}} />`}
-      ${modal==='sync' && html`<${SyncSetup} dk=${dk} onClose=${()=>setModal('settings')} onConnected=${async(token,gistId)=>{Gist.setCfg({token,gistId});setModal(null);await syncNow()}} tasks=${tasks} meta=${{dark,categories,pocs,groupBy}} />`}
+      ${modal==='settings' && html`<${Settings} dk=${dk} categories=${categories} setCategories=${setCategories} pocs=${pocs} setPocs=${setPocs} tasks=${tasks} setTasks=${setTasks} onClearAll=${clearAll} onClose=${()=>setModal(null)} fileRef=${fileRef} importCSV=${importCSV} importJSON=${importJSON} storeCfg=${Store.cfg()} onSetupSync=${()=>setModal('sync')} onDisconnectSync=${()=>{Store.clearCfg();setSyncStatus('idle');setLastSync(null)}} />`}
+      ${modal==='sync' && html`<${RepoSetup} dk=${dk} onClose=${()=>setModal('settings')} onConnected=${async(cfg)=>{Store.setCfg(cfg);setModal(null);await syncNow()}} tasks=${tasks} meta=${{dark,categories,pocs,groupBy}} />`}
       <input ref=${fileRef} type="file" accept=".csv,.json" onChange=${e=>{const f=e.target.files[0]; if(f?.name.endsWith('.json')) importJSON(e); else importCSV(e);}} class="hidden" />
     </div>
   `;
@@ -544,7 +584,7 @@ function Editor({ task: t, dk, cats, pocsList, contacts, tagsList, onUpdate, onD
   `;
 }
 
-function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTasks, onClearAll, onClose, fileRef, importCSV, importJSON, gistCfg, onSetupSync, onDisconnectSync }) {
+function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTasks, onClearAll, onClose, fileRef, importCSV, importJSON, storeCfg, onSetupSync, onDisconnectSync }) {
   const [newCat, setNewCat] = useState('');
   const [newPoc, setNewPoc] = useState('');
   const [tab, setTab] = useState('general');
@@ -569,15 +609,21 @@ function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTask
           ${tab==='general' && html`
             <div>
               <h3 class="text-sm font-medium mb-2">Cloud Sync</h3>
-              ${gistCfg ? html`
+              ${storeCfg && storeCfg.type==='repo' ? html`
                 <div class="flex items-center gap-2 text-xs">
                   <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>Connected to GitHub Gist</span>
+                  <span>Private repo <span class="font-mono opacity-80">${storeCfg.owner}/${storeCfg.repo}</span></span>
                   <button onClick=${onDisconnectSync} class="ml-auto text-rose-500 hover:underline">Disconnect</button>
                 </div>
+              ` : storeCfg && storeCfg.type==='gist' ? html`
+                <div class="p-2.5 rounded-md text-xs mb-2 ${dk?'bg-amber-900/30 text-amber-200':'bg-amber-50 text-amber-800'}">
+                  ⚠ Connected to a <b>secret gist</b> — readable by anyone who has the gist ID (no login needed). Upgrade to a private repo for real access control.
+                </div>
+                <button onClick=${onSetupSync} class="w-full py-2 rounded-md text-sm flex items-center justify-center gap-2 ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}"><${Icons.cloud} /> Move to private repo</button>
+                <button onClick=${onDisconnectSync} class="w-full mt-1 text-[11px] text-rose-500 hover:underline">Disconnect gist</button>
               ` : html`
-                <button onClick=${onSetupSync} class="w-full py-2 rounded-md text-sm flex items-center justify-center gap-2 ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}"><${Icons.cloud} /> Connect GitHub Gist</button>
-                <div class="text-[11px] opacity-50 mt-1">Sync tasks across all your devices</div>
+                <button onClick=${onSetupSync} class="w-full py-2 rounded-md text-sm flex items-center justify-center gap-2 ${dk?'bg-slate-700 hover:bg-slate-600':'bg-slate-900 text-white hover:bg-slate-800'}"><${Icons.cloud} /> Connect private repo</button>
+                <div class="text-[11px] opacity-50 mt-1">Syncs tasks across your devices — private, token-gated</div>
               `}
             </div>
           `}
@@ -621,76 +667,76 @@ function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTask
   `;
 }
 
-function SyncSetup({ dk, onClose, onConnected, tasks, meta }) {
+function RepoSetup({ dk, onClose, onConnected, tasks, meta }) {
   const [step, setStep] = useState(1);
   const [token, setToken] = useState('');
-  const [gistId, setGistId] = useState('');
-  const [mode, setMode] = useState('new'); // new | existing
+  const [owner, setOwner] = useState('');
+  const [repo, setRepo] = useState('task-data');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [user, setUser] = useState('');
+  const [busy, setBusy] = useState(false);
   const card = dk ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200';
   const ip = `w-full px-2.5 py-2 rounded-md text-sm border ${dk?'bg-slate-800 border-slate-700':'bg-stone-50 border-stone-200'} focus:outline-none`;
   const btn = `w-full py-2 rounded-md text-sm font-medium ${dk?'bg-slate-200 text-slate-900 hover:bg-white':'bg-slate-900 text-white hover:bg-slate-800'}`;
 
   const verifyToken = async () => {
-    setError(''); setStatus('Verifying...');
+    setError(''); setStatus('Verifying...'); setBusy(true);
     try {
-      const login = await Gist.test(token.trim());
-      setUser(login); setStep(2); setStatus('');
-    } catch(e) { setError('Invalid token. Check scopes (needs "gist").'); setStatus(''); }
+      const login = await Repo.testToken(token.trim());
+      setOwner(login); setStep(2); setStatus('');
+    } catch(e) { setError('Invalid token.'); setStatus(''); }
+    setBusy(false);
   };
 
   const connect = async () => {
-    setError(''); setStatus('Connecting...');
+    setError(''); setBusy(true);
     try {
-      let id = gistId.trim();
-      if (mode === 'new') {
-        id = await Gist.create(token.trim());
-        // Push current data to new gist
-        Gist.setCfg({ token: token.trim(), gistId: id });
-        await Gist.save({ tasks, meta });
+      const c = { type:'repo', token: token.trim(), owner: owner.trim(), repo: repo.trim(), path: 'tracker.json' };
+      if (!c.owner || !c.repo) { setError('Enter owner and repo'); setBusy(false); return; }
+      setStatus('Checking repo…');
+      const info = await Repo.testRepo(c);
+      if (info.private === false) { setError(`⚠ ${c.owner}/${c.repo} is PUBLIC. Make it private, then retry.`); setStatus(''); setBusy(false); return; }
+      setStatus('Reading…');
+      const { data } = await Repo._get(c);
+      if (!data || !data.tasks || data.tasks.length === 0) {
+        setStatus(`Migrating ${tasks.length} tasks…`);
+        await Repo.save(c, { tasks, meta });
+      } else {
+        setStatus(`Found ${data.tasks.length} tasks in repo — loading those…`);
       }
-      if (!id) { setError('Enter a Gist ID'); setStatus(''); return; }
-      onConnected(token.trim(), id);
-    } catch(e) { setError(e.message); setStatus(''); }
+      onConnected(c);
+    } catch(e) { setError(e.message); setStatus(''); setBusy(false); }
   };
 
   return html`
     <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick=${onClose}>
       <div class="w-full sm:max-w-md sm:rounded-lg rounded-t-2xl max-h-[85vh] overflow-y-auto border shadow-xl ${card}" onClick=${e=>e.stopPropagation()}>
         <div class="flex items-center justify-between px-5 py-3 border-b ${dk?'border-slate-700':'border-stone-200'}">
-          <h2 class="font-medium flex items-center gap-2"><${Icons.cloud} /> Connect Gist</h2>
+          <h2 class="font-medium flex items-center gap-2"><${Icons.cloud} /> Connect private repo</h2>
           <button onClick=${onClose} class="p-1 rounded ${dk?'hover:bg-slate-800':'hover:bg-stone-100'}"><${Icons.x} /></button>
         </div>
         <div class="p-5 space-y-4">
           ${step===1 && html`
             <div>
-              <div class="text-sm mb-3">Paste a GitHub personal access token with <code class="text-xs px-1 py-0.5 rounded ${dk?'bg-slate-800':'bg-stone-100'}">gist</code> scope.</div>
-              <div class="text-xs opacity-60 mb-3">GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic) > Generate new token > check "gist"</div>
-              <input class=${ip} type="password" value=${token} onInput=${e=>setToken(e.target.value)} placeholder="ghp_..." onKeyDown=${e=>e.key==='Enter'&&verifyToken()} />
+              <div class="text-sm mb-2">Paste a GitHub token with <b>Contents: read & write</b> on your private data repo.</div>
+              <div class="text-xs opacity-60 mb-3">Best: a <b>fine-grained</b> token (Settings › Developer settings › Fine-grained tokens) scoped to only that one repo. A classic token with <code class="px-1 rounded ${dk?'bg-slate-800':'bg-stone-100'}">repo</code> scope also works.</div>
+              <input class=${ip} type="password" value=${token} onInput=${e=>setToken(e.target.value)} placeholder="github_pat_… or ghp_…" onKeyDown=${e=>e.key==='Enter'&&!busy&&verifyToken()} />
               ${error && html`<div class="text-xs text-rose-500 mt-2">${error}</div>`}
               ${status && html`<div class="text-xs opacity-60 mt-2">${status}</div>`}
-              <button onClick=${verifyToken} disabled=${!token.trim()} class="${btn} mt-3 disabled:opacity-40">Verify token</button>
+              <button onClick=${verifyToken} disabled=${!token.trim()||busy} class="${btn} mt-3 disabled:opacity-40">Verify token</button>
             </div>
           `}
           ${step===2 && html`
             <div>
-              <div class="text-sm mb-3">Logged in as <span class="font-medium">${user}</span></div>
-              <div class="flex gap-2 mb-3">
-                <button onClick=${()=>setMode('new')} class="flex-1 py-2 rounded-md text-sm border ${mode==='new'?(dk?'border-slate-400 bg-slate-800':'border-slate-900 bg-slate-50'):(dk?'border-slate-700':'border-stone-200')}">${'New gist'}</button>
-                <button onClick=${()=>setMode('existing')} class="flex-1 py-2 rounded-md text-sm border ${mode==='existing'?(dk?'border-slate-400 bg-slate-800':'border-slate-900 bg-slate-50'):(dk?'border-slate-700':'border-stone-200')}">Existing gist</button>
+              <div class="text-sm mb-3">Token OK — <span class="font-medium">${owner}</span></div>
+              <div class="grid grid-cols-3 gap-2 mb-1">
+                <div><div class="text-[11px] opacity-60 mb-1">Owner</div><input class=${ip} value=${owner} onInput=${e=>setOwner(e.target.value)} /></div>
+                <div class="col-span-2"><div class="text-[11px] opacity-60 mb-1">Private repo name</div><input class=${ip} value=${repo} onInput=${e=>setRepo(e.target.value)} placeholder="task-data" /></div>
               </div>
-              ${mode==='new' && html`<div class="text-xs opacity-60">Creates a private gist with your current tasks.</div>`}
-              ${mode==='existing' && html`
-                <div>
-                  <div class="text-xs opacity-60 mb-2">Paste the Gist ID (from the URL: gist.github.com/user/<b>ID</b>)</div>
-                  <input class=${ip} value=${gistId} onInput=${e=>setGistId(e.target.value)} placeholder="abc123def456..." />
-                </div>
-              `}
+              <div class="text-[11px] opacity-60 mt-2">Data goes in <code class="px-1 rounded ${dk?'bg-slate-800':'bg-stone-100'}">${owner||'owner'}/${repo||'repo'}/tracker.json</code>. If the repo is empty, your current ${tasks.length} tasks are copied in. It must be a <b>private</b> repo.</div>
               ${error && html`<div class="text-xs text-rose-500 mt-2">${error}</div>`}
               ${status && html`<div class="text-xs opacity-60 mt-2">${status}</div>`}
-              <button onClick=${connect} class="${btn} mt-3">Connect</button>
+              <button onClick=${connect} disabled=${busy} class="${btn} mt-3 disabled:opacity-40">${busy?'Working…':'Connect'}</button>
             </div>
           `}
         </div>
