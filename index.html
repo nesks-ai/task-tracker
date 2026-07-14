@@ -55,6 +55,7 @@ const Icons = {
   check: () => I('M20 6L9 17l-5-5', 14),
   cloud: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
   layers: () => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+  undo: () => html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H9"/></svg>`,
 };
 
 // ── Constants ──
@@ -152,6 +153,46 @@ function App() {
   const saveTimer = useRef(null);
   const fileRef = useRef(null);
   const initialized = useRef(false);
+
+  // ── Undo (snapshot stack) ──
+  const tasksRef = useRef(tasks);
+  const historyRef = useRef([]);
+  const lastKeyRef = useRef(null);
+  const [histLen, setHistLen] = useState(0);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+  // Snapshot the pre-change task list before a mutation. Consecutive same-key
+  // edits within 1.2s coalesce into one step (so typing a word = one undo).
+  const recordBefore = useCallback((key) => {
+    const now = Date.now();
+    const lk = lastKeyRef.current;
+    if (!lk || lk.key !== key || now - lk.time > 1200) {
+      const h = historyRef.current;
+      h.push(tasksRef.current);
+      if (h.length > 40) h.shift();
+      setHistLen(h.length);
+    }
+    lastKeyRef.current = { key, time: now };
+  }, []);
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.length) return;
+    const prev = h.pop();
+    lastKeyRef.current = null;
+    setHistLen(h.length);
+    setExpandedId(null);
+    setTasks(prev);
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        const tag = (e.target && e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return; // let native text-undo work in fields
+        e.preventDefault(); undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo]);
 
   // Theme
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
@@ -286,9 +327,10 @@ function App() {
   }), [tasks]);
 
   // Handlers
-  const addTask = (ov={}) => { const t=expandTask({...ov, id:uid()}); setTasks(p=>[t,...p]); setExpandedId(t.id); };
-  const updateTask = (id, u) => setTasks(p => p.map(t => t.id===id ? {...t,...u,updatedAt:Date.now()} : t));
-  const deleteTask = id => { setTasks(p => p.filter(t => t.id!==id)); if(expandedId===id) setExpandedId(null); };
+  const addTask = (ov={}) => { const t=expandTask({...ov, id:uid()}); recordBefore('add:'+t.id); setTasks(p=>[t,...p]); setExpandedId(t.id); };
+  const updateTask = (id, u) => { recordBefore('edit:'+id+':'+Object.keys(u).join(',')); setTasks(p => p.map(t => t.id===id ? {...t,...u,updatedAt:Date.now()} : t)); };
+  const deleteTask = id => { recordBefore('del:'+id); setTasks(p => p.filter(t => t.id!==id)); if(expandedId===id) setExpandedId(null); };
+  const clearAll = () => { recordBefore('clear:'+Date.now()); setTasks([]); };
 
   const exportCSV = () => {
     const h=['Section','Category','Item','Detail','POC','Linked Contact','Start Date','End Date','Follow-up Date','Priority','Status','Tags','Notes'];
@@ -314,7 +356,7 @@ function App() {
         let sec=(g('section')||'TO DO').toUpperCase(); if(!SECTIONS.includes(sec)) sec='TO DO';
         nw.push(expandTask({id:uid(),section:sec,category:g('category'),item:g('item'),detail:g('detail'),poc:g('poc'),linkedContact:g('linkedContact'),startDate:g('startDate'),endDate:g('endDate'),followUpDate:g('followUpDate'),priority:pri,status:g('status')||'In Process',tags:g('tags')?g('tags').split(/[;,]/).map(t=>t.trim()).filter(Boolean):[],notes:g('notes')}));
       }
-      if(nw.length) setTasks(p=>[...nw,...p]);
+      if(nw.length){ recordBefore('import:'+Date.now()); setTasks(p=>[...nw,...p]); }
     } catch(err) { alert('CSV parse error: '+err.message); }
     e.target.value='';
   };
@@ -324,7 +366,7 @@ function App() {
     try {
       const data=JSON.parse(await f.text());
       const ts=(data.tasks||data).map(t=>expandTask(t));
-      if(ts.length) setTasks(p=>[...ts,...p]);
+      if(ts.length){ recordBefore('import:'+Date.now()); setTasks(p=>[...ts,...p]); }
     } catch(err) { alert('JSON parse error: '+err.message); }
     e.target.value='';
   };
@@ -350,6 +392,8 @@ function App() {
               ${stats.overdue>0 && html`<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 flex items-center gap-1"><${Icons.alert} />${stats.overdue} overdue</span>`}
             </div>
             <div class="flex-1" />
+            <!-- Undo -->
+            <button onClick=${undo} disabled=${histLen===0} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'} disabled:opacity-30 disabled:cursor-not-allowed" title=${histLen?`Undo (${histLen}) · Ctrl/⌘+Z`:'Nothing to undo'}><${Icons.undo} /></button>
             <!-- Sync -->
             <button onClick=${syncNow} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'} relative" title=${lastSync?'Last sync: '+lastSync.toLocaleTimeString():'Sync'}>
               <span class="${syncStatus==='syncing'?'spin':''}"><${Icons.sync} /></span>
@@ -421,7 +465,7 @@ function App() {
         <button onClick=${()=>addTask()} class="mt-4 w-full py-2.5 rounded-lg border-2 border-dashed text-sm flex items-center justify-center gap-2 ${dk?'border-slate-700 hover:border-slate-600 hover:bg-slate-800/50 text-slate-400':'border-stone-300 hover:border-stone-400 hover:bg-white text-stone-500'}"><${Icons.plus} /> New task</button>
       </div>
 
-      ${modal==='settings' && html`<${Settings} dk=${dk} categories=${categories} setCategories=${setCategories} pocs=${pocs} setPocs=${setPocs} tasks=${tasks} setTasks=${setTasks} onClose=${()=>setModal(null)} fileRef=${fileRef} importCSV=${importCSV} importJSON=${importJSON} gistCfg=${Gist.cfg()} onSetupSync=${()=>setModal('sync')} onDisconnectSync=${()=>{Gist.clearCfg();setSyncStatus('idle');setLastSync(null)}} />`}
+      ${modal==='settings' && html`<${Settings} dk=${dk} categories=${categories} setCategories=${setCategories} pocs=${pocs} setPocs=${setPocs} tasks=${tasks} setTasks=${setTasks} onClearAll=${clearAll} onClose=${()=>setModal(null)} fileRef=${fileRef} importCSV=${importCSV} importJSON=${importJSON} gistCfg=${Gist.cfg()} onSetupSync=${()=>setModal('sync')} onDisconnectSync=${()=>{Gist.clearCfg();setSyncStatus('idle');setLastSync(null)}} />`}
       ${modal==='sync' && html`<${SyncSetup} dk=${dk} onClose=${()=>setModal('settings')} onConnected=${async(token,gistId)=>{Gist.setCfg({token,gistId});setModal(null);await syncNow()}} tasks=${tasks} meta=${{dark,categories,pocs,groupBy}} />`}
       <input ref=${fileRef} type="file" accept=".csv,.json" onChange=${e=>{const f=e.target.files[0]; if(f?.name.endsWith('.json')) importJSON(e); else importCSV(e);}} class="hidden" />
     </div>
@@ -500,7 +544,7 @@ function Editor({ task: t, dk, cats, pocsList, contacts, tagsList, onUpdate, onD
   `;
 }
 
-function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTasks, onClose, fileRef, importCSV, importJSON, gistCfg, onSetupSync, onDisconnectSync }) {
+function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTasks, onClearAll, onClose, fileRef, importCSV, importJSON, gistCfg, onSetupSync, onDisconnectSync }) {
   const [newCat, setNewCat] = useState('');
   const [newPoc, setNewPoc] = useState('');
   const [tab, setTab] = useState('general');
@@ -567,7 +611,7 @@ function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTask
               <div class="pt-3 border-t ${dk?'border-slate-700':'border-stone-200'}">
                 <h3 class="text-sm font-medium mb-2">Reset</h3>
                 ${!confirmReset ? html`<button onClick=${()=>setConfirmReset(true)} class="text-xs text-rose-500 hover:underline">Clear all tasks...</button>`
-                : html`<div class="flex items-center gap-2"><span class="text-xs">Delete everything?</span><button onClick=${()=>{setTasks([]);localStorage.removeItem(LS_KEY);setConfirmReset(false);onClose()}} class="text-xs px-2 py-1 rounded bg-rose-500 text-white">Yes</button><button onClick=${()=>setConfirmReset(false)} class="text-xs px-2 py-1 rounded border ${dk?'border-slate-600':'border-stone-300'}">Cancel</button></div>`}
+                : html`<div class="flex items-center gap-2"><span class="text-xs">Delete everything?</span><button onClick=${()=>{onClearAll();setConfirmReset(false);onClose()}} class="text-xs px-2 py-1 rounded bg-rose-500 text-white">Yes</button><button onClick=${()=>setConfirmReset(false)} class="text-xs px-2 py-1 rounded border ${dk?'border-slate-600':'border-stone-300'}">Cancel</button></div>`}
               </div>
             </div>
           `}
