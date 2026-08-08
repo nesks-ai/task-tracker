@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>OQ Register</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --border:#30363d;
+  --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff;
+  --open:#3fb950; --overdue:#f85149; --resolved:#8b949e; --note:#d29922;
+  --chip:#21262d;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+body{margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:90px}
+header{position:sticky; top:0; z-index:10; background:rgba(13,17,23,.95);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--border);
+  padding:calc(env(safe-area-inset-top) + 10px) 14px 0}
+.hrow{display:flex; align-items:center; gap:10px}
+h1{font-size:17px; margin:0; flex:1; font-weight:600}
+h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
+.iconbtn{background:none; border:none; color:var(--muted); font-size:19px; padding:6px; cursor:pointer}
+.iconbtn:active{color:var(--text)}
+#syncdot{width:9px; height:9px; border-radius:50%; background:var(--muted); flex:none}
+#syncdot.ok{background:var(--open)} #syncdot.err{background:var(--overdue)}
+#syncdot.busy{background:var(--note); animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+#search{width:100%; margin:9px 0; padding:8px 12px; border-radius:8px;
+  border:1px solid var(--border); background:var(--panel); color:var(--text); font-size:15px}
+#search:focus{outline:none; border-color:var(--accent)}
+.tabs{display:flex; gap:2px}
+.tab{flex:1; text-align:center; padding:9px 4px; font-size:13.5px; color:var(--muted);
+  border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap}
+.tab.active{color:var(--text); border-color:var(--accent); font-weight:600}
+.chips{display:flex; gap:6px; overflow-x:auto; padding:10px 14px 6px; scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none; padding:4px 11px; border-radius:14px; background:var(--chip);
+  border:1px solid var(--border); color:var(--muted); font-size:12.5px; cursor:pointer}
+.chip.active{background:var(--accent); color:#0d1117; border-color:var(--accent); font-weight:600}
+#list{padding:6px 12px}
+.card{background:var(--panel); border:1px solid var(--border); border-radius:10px;
+  padding:11px 13px; margin-bottom:9px; cursor:pointer}
+.card.expanded{background:var(--panel2)}
+.cardtop{display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:6px}
+.rid{font-weight:700; font-size:13px; color:var(--accent)}
+.badge{font-size:11px; padding:2px 8px; border-radius:10px; background:var(--chip); color:var(--muted)}
+.pill{font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; margin-left:auto}
+.pill.open{background:rgba(63,185,80,.15); color:var(--open)}
+.pill.overdue{background:rgba(248,81,73,.15); color:var(--overdue)}
+.pill.resolved{background:rgba(139,148,158,.15); color:var(--resolved)}
+.due{font-size:11.5px; color:var(--muted)}
+.due.past{color:var(--overdue); font-weight:600}
+.rtext{font-size:14px; color:var(--text)}
+.card:not(.expanded) .rtext{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden}
+.rtext b{color:#fff}
+.wl{color:var(--accent); background:rgba(88,166,255,.08); border-radius:4px; padding:0 3px}
+.rtext code{background:var(--chip); border-radius:4px; padding:0 4px; font-size:12.5px}
+.meta{margin-top:7px; font-size:12px; color:var(--muted)}
+.resol{margin-top:7px; padding:7px 9px; background:rgba(210,153,34,.07);
+  border-left:2px solid var(--note); border-radius:0 6px 6px 0; font-size:12.5px; color:var(--muted)}
+.actions{display:flex; gap:7px; margin-top:10px; flex-wrap:wrap}
+.abtn{padding:7px 12px; border-radius:7px; border:1px solid var(--border);
+  background:var(--chip); color:var(--text); font-size:12.5px; cursor:pointer}
+.abtn.green{border-color:var(--open); color:var(--open)}
+.abtn.red{border-color:var(--overdue); color:var(--overdue)}
+.abtn:active{opacity:.6}
+#empty{text-align:center; color:var(--muted); padding:50px 20px; font-size:14px}
+#fab{position:fixed; right:18px; bottom:calc(env(safe-area-inset-bottom) + 20px);
+  width:54px; height:54px; border-radius:50%; background:var(--accent); color:#0d1117;
+  font-size:28px; border:none; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.5); z-index:20}
+.sheet-bg{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:30; display:none}
+.sheet-bg.show{display:block}
+.sheet{position:fixed; left:0; right:0; bottom:0; z-index:31; background:var(--panel);
+  border-radius:16px 16px 0 0; border-top:1px solid var(--border);
+  padding:18px 16px calc(env(safe-area-inset-bottom) + 18px); max-height:88vh; overflow-y:auto;
+  transform:translateY(105%); transition:transform .22s ease}
+.sheet.show{transform:none}
+.sheet h2{font-size:16px; margin:0 0 14px}
+.sheet label{display:block; font-size:12.5px; color:var(--muted); margin:12px 0 4px}
+.sheet input[type=text],.sheet input[type=date],.sheet textarea,.sheet select{
+  width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); font-size:15px; font-family:inherit}
+.sheet textarea{min-height:84px; resize:vertical}
+.seg{display:flex; gap:6px}
+.seg button{flex:1; padding:9px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg); color:var(--muted); font-size:14px; cursor:pointer}
+.seg button.active{border-color:var(--accent); color:var(--accent); font-weight:600}
+.primary{width:100%; margin-top:18px; padding:12px; border-radius:9px; border:none;
+  background:var(--accent); color:#0d1117; font-size:15px; font-weight:700; cursor:pointer}
+.primary:disabled{opacity:.4}
+.ghost{width:100%; margin-top:8px; padding:10px; border-radius:9px; border:1px solid var(--border);
+  background:none; color:var(--muted); font-size:14px; cursor:pointer}
+.hint{font-size:12px; color:var(--muted); line-height:1.5; margin-top:10px}
+.hint a{color:var(--accent)}
+#toast{position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 88px);
+  transform:translateX(-50%); background:var(--panel2); border:1px solid var(--border);
+  color:var(--text); padding:9px 16px; border-radius:9px; font-size:13.5px; z-index:50;
+  display:none; max-width:86vw; text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div id="syncdot"></div>
+    <h1>OQ Register<small id="counts"></small></h1>
+    <button class="iconbtn" id="refreshbtn" title="Refresh">⟳</button>
+    <button class="iconbtn" id="settingsbtn" title="Settings">⚙</button>
+  </div>
+  <input id="search" type="search" placeholder="Search text, IDs, pages…">
+  <div class="tabs">
+    <div class="tab active" data-tab="OQ">Open Questions</div>
+    <div class="tab" data-tab="CN">Contradictions</div>
+    <div class="tab" data-tab="AR">Archive</div>
+  </div>
+</header>
+
+<div class="chips" id="domainchips"></div>
+<div class="chips" id="statuschips" style="padding-top:0"></div>
+<div id="list"></div>
+<div id="empty" style="display:none">Nothing matches.</div>
+<button id="fab">+</button>
+
+<div class="sheet-bg" id="sheetbg"></div>
+
+<!-- settings / token sheet -->
+<div class="sheet" id="settingsSheet">
+  <h2>Connection</h2>
+  <label>GitHub fine-grained token (repo: llm-wiki, Contents RW)</label>
+  <input type="text" id="tokenInput" placeholder="github_pat_…" autocomplete="off">
+  <button class="primary" id="saveToken">Save & connect</button>
+  <button class="ghost" id="clearToken">Forget token</button>
+  <div class="hint">
+    Mint at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings → fine-grained tokens</a>:
+    resource owner <b>nesks-ai</b>, only repository <b>llm-wiki</b>, permission <b>Contents: read &amp; write</b>.
+    Token stays in this browser only. Edits commit to the private repo; the 3-hourly vault sync carries them home.
+  </div>
+  <div class="hint" id="fileinfo"></div>
+</div>
+
+<!-- edit sheet -->
+<div class="sheet" id="editSheet">
+  <h2 id="editTitle"></h2>
+  <div id="editBody" style="font-size:13px;color:var(--muted);max-height:24vh;overflow-y:auto"></div>
+  <div id="dueWrap">
+    <label>Due / gate date</label>
+    <input type="date" id="dueInput">
+  </div>
+  <label>Note / resolution</label>
+  <textarea id="noteInput" placeholder="What you saw, decided, or resolved…"></textarea>
+  <div class="actions" style="margin-top:14px">
+    <button class="abtn green" id="opResolve">✅ Resolve</button>
+    <button class="abtn red" id="opOverdue">⏰ Overdue</button>
+    <button class="abtn" id="opReopen">↺ Reopen</button>
+  </div>
+  <button class="primary" id="opNote">Save note / date only</button>
+</div>
+
+<!-- add sheet -->
+<div class="sheet" id="addSheet">
+  <h2>New row</h2>
+  <div class="seg" id="typeSeg">
+    <button data-t="OQ" class="active">Open question (OQ)</button>
+    <button data-t="CN">Contradiction (CN)</button>
+  </div>
+  <label>Domain</label>
+  <select id="addDomain"></select>
+  <div id="addDueWrap">
+    <label>Due / gate date (optional)</label>
+    <input type="date" id="addDue">
+  </div>
+  <label id="addTextLabel">Question (numbers included)</label>
+  <textarea id="addText"></textarea>
+  <label>Pages (optional, e.g. [[SSL State of Play]])</label>
+  <input type="text" id="addPages" placeholder="—">
+  <button class="primary" id="addSave">Add row</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const OWNER='nesks-ai', REPO='llm-wiki', BRANCH='main';
+const PATH='wiki/synthesis/Open-Questions-and-Contradictions.md';
+const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(PATH).replace(/%2F/g,'/')}`;
+const TOKEN_KEY='oq_gh_token';
+
+const SECTIONS={
+  CN:{heading:'## Contradictions (CN-xxx)', left:['id','raised','domain'], right:['pages','status','resolution']},
+  OQ:{heading:'## Open questions & decision gates (OQ-xxx)', left:['id','raised','due','domain'], right:['pages','status','resolution']},
+  AR:{heading:'## Resolved (archive)', left:['id','raised','resolved','domain'], right:['pages','resolution']}
+};
+const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|⏰|✅|❌|^—$|^\s*$/i;
+
+let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='';
+let tab='OQ', domainFilter='All', statusFilter='All', expanded=null, editRow=null, addType='OQ';
+
+// ---------- utils ----------
+const $=id=>document.getElementById(id);
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+function toast(msg,ms=2600){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms);}
+function b64decode(b64){const bin=atob(b64.replace(/\n/g,''));const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder('utf-8').decode(bytes);}
+function b64encode(str){const bytes=new TextEncoder().encode(str);let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(bin);}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function splitCells(line){return line.split(/(?<!\\)\|/);}  // keeps leading/trailing empties
+function esc4cell(s){return s.replace(/\|/g,'\\|').replace(/\r?\n/g,' ');}
+function render(md){
+  let h=escHtml(md);
+  h=h.replace(/\[\[([^\]]+?)\\\|([^\]]+?)\]\]/g,'<span class="wl">$2</span>');
+  h=h.replace(/\[\[([^\]]+?)\]\]/g,'<span class="wl">$1</span>');
+  h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
+  h=h.replace(/\\\|/g,'|');
+  return h;
+}
+function statusClass(s){if(/RESOLVED/i.test(s))return'resolved';if(/OVERDUE|⏰/.test(s))return'overdue';return'open';}
+function dueDate(s){const m=(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:null;}
+
+// ---------- parse ----------
+function parse(content){
+  EOL=content.includes('\r\n')?'\r\n':'\n';
+  lines=content.split(EOL);
+  model={CN:[],OQ:[],AR:[]};
+  const upd=lines.findIndex(l=>l.startsWith('updated:'));
+  fmUpdated=upd>=0?lines[upd].slice(8).trim():'';
+  for(const key of Object.keys(SECTIONS)){
+    const sec=SECTIONS[key];
+    const start=lines.findIndex(l=>l.trim()===sec.heading);
+    if(start<0)continue;
+    let end=lines.length;
+    for(let i=start+1;i<lines.length;i++){if(lines[i].startsWith('## ')){end=i;break;}}
+    for(let i=start+1;i<end;i++){
+      const l=lines[i];
+      const idm=l.match(/^\|\s*(CN|OQ)-\d+/);
+      if(!idm)continue;
+      // classify by ID prefix, not table position — some CN rows physically sit in the OQ table
+      const bucket=key==='AR'?'AR':idm[1];
+      const layout=key==='AR'?SECTIONS.AR:SECTIONS[idm[1]];
+      const cells=splitCells(l);                 // leading '' before first |
+      const trail=cells.length>1&&cells[cells.length-1].trim()===''?1:0;
+      const cc=cells.slice(1,cells.length-trail); // content cells
+      const L=layout.left, R=layout.right, full=L.length+R.length+1;
+      const row={line:i, section:bucket, cells, ccStart:1, ccLen:cc.length, rlen:R.length};
+      if(cc.length>=full){
+        L.forEach((c,idx)=>row[c]=cc[idx].trim());
+        R.forEach((c,idx)=>row[c]=cc[cc.length-R.length+idx].trim());
+        row.text=cc.slice(L.length,cc.length-R.length).join('|').trim();
+        // extra pipes in the row: only trust right-anchoring if status cell looks like a status
+        row.editable=cc.length===full||key==='AR'||STATUS_RE.test(row.status||'');
+        if(!row.editable){row.text=cc.slice(L.length).join('|').trim();row.pages='';row.status='';row.resolution='';}
+      }else{ // short row — display best-effort, never write
+        L.forEach((c,idx)=>row[c]=(cc[idx]||'').trim());
+        row.text=cc.slice(L.length).join('|').trim();
+        row.pages='';row.status=row.status||'';row.resolution='';
+        row.editable=false;
+      }
+      model[bucket].push(row);
+    }
+  }
+}
+function nextId(prefix){
+  let max=0;
+  for(const l of lines){const re=new RegExp(prefix+'-(\\d+)','g');let m;while((m=re.exec(l)))max=Math.max(max,+m[1]);}
+  return prefix+'-'+String(max+1).padStart(3,'0');
+}
+function setCell(row,col,val){
+  if(!row.editable)return;
+  const sec=SECTIONS[row.section];
+  let li=sec.left.indexOf(col), ri=sec.right.indexOf(col), idx;
+  if(li>=0)idx=row.ccStart+li;
+  else if(ri>=0)idx=row.ccStart+row.ccLen-row.rlen+ri;
+  else return;
+  row.cells[idx]=' '+esc4cell(val)+' ';
+  lines[row.line]=row.cells.join('|');
+  row[col]=val;
+}
+function bumpUpdated(note){
+  const i=lines.findIndex(l=>l.startsWith('updated:'));
+  if(i>=0)lines[i]=`updated: ${today()} (live register: ${note})`;
+}
+
+// ---------- GitHub I/O ----------
+function token(){return localStorage.getItem(TOKEN_KEY)||'';}
+async function ghFetch(){
+  const r=await fetch(API+'?ref='+BRANCH,{headers:{Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'},cache:'no-store'});
+  if(r.status===401||r.status===403)throw new Error('AUTH');
+  if(r.status===404)throw new Error('Not found — token may lack access to '+REPO);
+  if(!r.ok)throw new Error('GitHub '+r.status);
+  const j=await r.json();
+  sha=j.sha;
+  parse(b64decode(j.content));
+}
+async function ghPut(message){
+  const body={message:'live-OQ: '+message, content:b64encode(lines.join(EOL)), sha, branch:BRANCH};
+  const r=await fetch(API,{method:'PUT',headers:{Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
+  if(r.status===409||r.status===422)throw new Error('CONFLICT');
+  if(!r.ok)throw new Error('GitHub write '+r.status);
+  const j=await r.json();
+  sha=j.content.sha;
+}
+// apply op (a function that mutates lines via the model), with one conflict retry
+async function commit(op, message){
+  setDot('busy');
+  try{
+    op(); bumpUpdated(message);
+    try{ await ghPut(message); }
+    catch(e){
+      if(e.message!=='CONFLICT')throw e;
+      toast('File changed remotely — re-syncing…');
+      await ghFetch(); op(); bumpUpdated(message);
+      await ghPut(message);
+    }
+    parse(lines.join(EOL));       // re-parse to refresh line indices
+    draw(); setDot('ok'); toast('✓ '+message);
+  }catch(e){
+    setDot('err');
+    if(e.message==='AUTH'){toast('Token rejected — check settings');openSheet('settingsSheet');}
+    else toast('Failed: '+e.message,4000);
+    try{await ghFetch();draw();}catch(_){}
+  }
+}
+function setDot(c){$('syncdot').className=c;}
+
+// ---------- UI ----------
+function activeRows(){
+  let rows=model[tab]||[];
+  if(domainFilter!=='All')rows=rows.filter(r=>r.domain===domainFilter);
+  if(statusFilter!=='All')rows=rows.filter(r=>statusClass(r.status||'')===statusFilter);
+  const q=$('search').value.trim().toLowerCase();
+  if(q)rows=rows.filter(r=>(r.id+' '+r.text+' '+(r.pages||'')+' '+(r.resolution||'')+' '+r.domain).toLowerCase().includes(q));
+  if(tab==='OQ'){
+    const t=today();
+    rows=[...rows].sort((a,b)=>{
+      const sa=statusClass(a.status), sb=statusClass(b.status);
+      const oa=(sa==='overdue'||(dueDate(a.due)&&dueDate(a.due)<t&&sa==='open'))?0:1;
+      const ob=(sb==='overdue'||(dueDate(b.due)&&dueDate(b.due)<t&&sb==='open'))?0:1;
+      if(oa!==ob)return oa-ob;
+      const da=dueDate(a.due)||'9999', db=dueDate(b.due)||'9999';
+      if(da!==db)return da<db?-1:1;
+      return b.id.localeCompare(a.id,undefined,{numeric:true});
+    });
+  }else{
+    rows=[...rows].sort((a,b)=>b.id.localeCompare(a.id,undefined,{numeric:true}));
+  }
+  return rows;
+}
+function draw(){
+  // counts + chips
+  $('counts').textContent=`${model.OQ.length} OQ · ${model.CN.length} CN`;
+  const domains=['All',...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d!=='—'&&d.length<25))];
+  $('domainchips').innerHTML=domains.map(d=>`<div class="chip ${d===domainFilter?'active':''}" data-d="${escHtml(d)}">${escHtml(d)}</div>`).join('');
+  const sts=['All','open','overdue','resolved'];
+  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${s==='All'?'Any status':s==='open'?'🟢 open':s==='overdue'?'⏰ overdue':'✅ resolved'}</div>`).join('');
+  // list
+  const rows=activeRows(), t=today();
+  $('empty').style.display=rows.length?'none':'block';
+  $('list').innerHTML=rows.map(r=>{
+    const sc=statusClass(r.status||'RESOLVED');
+    const dd=dueDate(r.due);
+    const past=dd&&dd<t&&sc==='open';
+    return `<div class="card ${expanded===r.id?'expanded':''}" data-id="${r.id}">
+      <div class="cardtop">
+        <span class="rid">${r.id}</span>
+        <span class="badge">${escHtml(r.domain||'')}</span>
+        ${r.due?`<span class="due ${past||sc==='overdue'?'past':''}">📅 ${escHtml(r.due.length>28?(dd||r.due.slice(0,26)+'…'):r.due)}</span>`:''}
+        ${tab!=='AR'?`<span class="pill ${sc}">${sc==='open'?'OPEN':sc==='overdue'?'OVERDUE':'RESOLVED'}</span>`:'<span class="pill resolved">ARCHIVED</span>'}
+      </div>
+      <div class="rtext">${render(r.text||'')}</div>
+      ${expanded===r.id?`
+        <div class="meta">raised ${escHtml(r.raised||'')}${r.pages&&r.pages!=='—'?' · '+render(r.pages):''}</div>
+        ${r.resolution&&r.resolution!=='—'?`<div class="resol">${render(r.resolution)}</div>`:''}
+        ${tab!=='AR'?(r.editable?`<div class="actions"><button class="abtn" data-act="edit" data-id="${r.id}">✏️ Update…</button></div>`:`<div class="meta">⚠️ irregular table row — edit it in the vault</div>`):''}
+      `:''}
+    </div>`;
+  }).join('');
+}
+function findRow(id){for(const k of['CN','OQ','AR'])for(const r of model[k])if(r.id===id)return r;return null;}
+
+// ---------- sheets ----------
+function openSheet(id){$('sheetbg').classList.add('show');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show'));$(id).classList.add('show');}
+function closeSheets(){$('sheetbg').classList.remove('show');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show'));}
+$('sheetbg').onclick=closeSheets;
+
+// settings
+$('settingsbtn').onclick=()=>{$('tokenInput').value=token();$('fileinfo').textContent=fmUpdated?('Register last updated: '+fmUpdated.replace(/\*\*/g,'')):'';openSheet('settingsSheet');};
+$('saveToken').onclick=async()=>{localStorage.setItem(TOKEN_KEY,$('tokenInput').value.trim());closeSheets();await load();};
+$('clearToken').onclick=()=>{localStorage.removeItem(TOKEN_KEY);$('tokenInput').value='';toast('Token cleared');};
+
+// edit
+function openEdit(id){
+  const r=findRow(id); if(!r)return;
+  editRow=r;
+  $('editTitle').textContent=r.id+' · '+r.domain;
+  $('editBody').innerHTML=render(r.text||'');
+  $('dueWrap').style.display=r.section==='OQ'?'':'none';
+  $('dueInput').value=dueDate(r.due)||'';
+  $('noteInput').value='';
+  openSheet('editSheet');
+}
+function noteText(){return $('noteInput').value.trim();}
+function applyResolution(r,label){
+  const n=noteText();
+  const add=label+(n?': '+n:'');
+  const cur=(r.resolution&&r.resolution!=='—')?r.resolution+' ':'';
+  setCell(r,'resolution',cur+add);
+}
+$('opResolve').onclick=()=>{const r=editRow;closeSheets();
+  commit(()=>{const row=findRow(r.id);setCell(row,'status','✅ RESOLVED '+today()+' (live)');applyResolution(row,'✅ '+today());maybeDue(row);},r.id+' resolved');};
+$('opOverdue').onclick=()=>{const r=editRow;closeSheets();
+  commit(()=>{const row=findRow(r.id);setCell(row,'status','⏰ OVERDUE');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' flagged overdue');};
+$('opReopen').onclick=()=>{const r=editRow;closeSheets();
+  commit(()=>{const row=findRow(r.id);setCell(row,'status','OPEN');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' reopened');};
+$('opNote').onclick=()=>{const r=editRow;
+  if(!noteText()&&!( r.section==='OQ'&&$('dueInput').value&&$('dueInput').value!==dueDate(r.due))){toast('Nothing to save');return;}
+  closeSheets();
+  commit(()=>{const row=findRow(r.id);if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' note');};
+function maybeDue(row){
+  if(row.section!=='OQ')return;
+  const v=$('dueInput').value;
+  if(v&&v!==dueDate(row.due))setCell(row,'due',v);
+}
+
+// add
+$('fab').onclick=()=>{
+  const domains=[...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d.length<20))];
+  $('addDomain').innerHTML=domains.map(d=>`<option>${escHtml(d)}</option>`).join('');
+  $('addText').value='';$('addPages').value='';$('addDue').value='';
+  setAddType(tab==='CN'?'CN':'OQ');
+  openSheet('addSheet');
+};
+function setAddType(t){addType=t;
+  document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
+  $('addDueWrap').style.display=t==='OQ'?'':'none';
+  $('addTextLabel').textContent=t==='OQ'?'Question (numbers included)':'Contradiction (one line, numbers included)';
+}
+document.querySelectorAll('#typeSeg button').forEach(b=>b.onclick=()=>setAddType(b.dataset.t));
+$('addSave').onclick=()=>{
+  const text=$('addText').value.trim();
+  if(!text){toast('Write the row text first');return;}
+  const domain=$('addDomain').value, pages=$('addPages').value.trim()||'—';
+  const due=$('addDue').value||'—';
+  const t=addType; closeSheets();
+  let newId='';
+  commit(()=>{
+    newId=nextId(t);
+    const c=esc4cell.bind(null);
+    const rowLine=t==='CN'
+      ?`| ${newId} | ${today()} | ${c(domain)} | ${c(text)} | ${c(pages)} | OPEN | — |`
+      :`| ${newId} | ${today()} | ${c(due)} | ${c(domain)} | ${c(text)} | ${c(pages)} | OPEN | — |`;
+    // insert after last row of that section's table
+    const sec=SECTIONS[t];
+    const start=lines.findIndex(l=>l.trim()===sec.heading);
+    let end=lines.length;
+    for(let i=start+1;i<lines.length;i++){if(lines[i].startsWith('## ')){end=i;break;}}
+    let last=-1;
+    for(let i=start+1;i<end;i++)if(/^\|\s*(CN|OQ)-\d+/.test(lines[i]))last=i;
+    lines.splice(last>=0?last+1:start+3,0,rowLine);
+  },(newId||t+'-new')+' raised from live register');
+};
+
+// tabs / chips / cards / search
+document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{tab=el.dataset.tab;statusFilter='All';expanded=null;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===el));draw();});
+$('domainchips').onclick=e=>{const c=e.target.closest('.chip');if(c){domainFilter=c.dataset.d;draw();}};
+$('statuschips').onclick=e=>{const c=e.target.closest('.chip');if(c){statusFilter=c.dataset.s;draw();}};
+$('list').onclick=e=>{
+  const b=e.target.closest('[data-act="edit"]');
+  if(b){e.stopPropagation();openEdit(b.dataset.id);return;}
+  const card=e.target.closest('.card');
+  if(card){expanded=expanded===card.dataset.id?null:card.dataset.id;draw();}
+};
+$('search').oninput=()=>draw();
+$('refreshbtn').onclick=()=>load();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token())load(true);});
+
+// ---------- boot ----------
+async function load(quiet){
+  if(!token()){openSheet('settingsSheet');return;}
+  setDot('busy');
+  try{await ghFetch();draw();setDot('ok');if(!quiet)toast('Synced');}
+  catch(e){setDot('err');
+    if(e.message==='AUTH'){toast('Token needed / rejected');openSheet('settingsSheet');}
+    else toast('Load failed: '+e.message,4000);}
+}
+// test hook: allows loading raw markdown without a token (read-only preview)
+window.__loadMarkdown=md=>{parse(md);draw();setDot('ok');};
+load();
+</script>
+</body>
+</html>
