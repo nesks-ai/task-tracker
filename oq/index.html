@@ -152,7 +152,7 @@ h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
     <label>Due / gate date</label>
     <input type="date" id="dueInput">
   </div>
-  <label>Note / resolution</label>
+  <label>Add note (appended — existing notes above are kept)</label>
   <textarea id="noteInput" placeholder="What you saw, decided, or resolved…"></textarea>
   <div class="actions" style="margin-top:14px">
     <button class="abtn green" id="opResolve">✅ Resolve</button>
@@ -397,7 +397,8 @@ function openEdit(id){
   const r=findRow(id); if(!r)return;
   editRow=r;
   $('editTitle').textContent=r.id+' · '+r.domain;
-  $('editBody').innerHTML=render(r.text||'');
+  $('editBody').innerHTML=render(r.text||'')
+    +((r.resolution&&r.resolution!=='—')?'<div class="resol" style="margin-top:8px">'+render(r.resolution)+'</div>':'');
   $('dueWrap').style.display=r.section==='OQ'?'':'none';
   $('dueInput').value=dueDate(r.due)||'';
   $('noteInput').value='';
