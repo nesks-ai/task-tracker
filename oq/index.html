@@ -3,236 +3,317 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#F7F6F3">
 <title>OQ Register</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --border:#30363d;
-  --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff;
-  --open:#3fb950; --overdue:#f85149; --resolved:#8b949e; --note:#d29922;
-  --chip:#21262d;
+  --b:#F7F6F3; --s:#FFFFFF; --s2:#F5F3EF; --s3:#FCFBF9; --d:#E4E1DA; --d2:#D3CFC6;
+  --t:#1B1E23; --m:#6A7280; --dm:#9AA1AB; --h:#FAF9F6; --hb:rgba(247,246,243,0.86);
+  --g:#1F8A54; --onG:#FFFFFF; --gb:#EDF7F1; --gd:#C6E5D2;
+  --a:#B4690E; --ab:#FDF6E8; --abh:#FBF0DA; --ad:#EAD6AC;
+  --p:#6D3FD1; --pb:#F5F1FD; --pd:#DFD3F7;
+  --u:#2563EB; --ub:#EDF3FE; --ud:#CFDFFB;
+  --r:#B4433B; --rd:#EBCFCC;
+}
+:root[data-theme="dark"]{
+  --b:#0C0E12; --s:#14181F; --s2:#1A1F27; --s3:#11151B; --d:#252C36; --d2:#333C48;
+  --t:#E7EDF4; --m:#94A0B0; --dm:#6B7683; --h:#1A1F27; --hb:rgba(12,14,18,0.86);
+  --g:#4FD189; --onG:#0C0E12; --gb:#12241B; --gd:#1F4030;
+  --a:#EFAE4B; --ab:#231B0F; --abh:#2B2113; --ad:#4A3A1C;
+  --p:#B39BFA; --pb:#1B1730; --pd:#332A54;
+  --u:#7FB0FF; --ub:#101B2C; --ud:#22344F;
+  --r:#E8827A; --rd:#40272A;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-body{margin:0; background:var(--bg); color:var(--text);
-  font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  padding-bottom:90px}
-header{position:sticky; top:0; z-index:10; background:rgba(13,17,23,.95);
-  backdrop-filter:blur(8px); border-bottom:1px solid var(--border);
-  padding:calc(env(safe-area-inset-top) + 10px) 14px 0}
-.hrow{display:flex; align-items:center; gap:10px}
-h1{font-size:17px; margin:0; flex:1; font-weight:600}
-h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
-.iconbtn{background:none; border:none; color:var(--muted); font-size:19px; padding:6px; cursor:pointer}
-.iconbtn:active{color:var(--text)}
-#syncdot{width:9px; height:9px; border-radius:50%; background:var(--muted); flex:none}
-#syncdot.ok{background:var(--open)} #syncdot.err{background:var(--overdue)}
-#syncdot.busy{background:var(--note); animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.3}}
-#search{width:100%; margin:9px 0; padding:8px 12px; border-radius:8px;
-  border:1px solid var(--border); background:var(--panel); color:var(--text); font-size:15px}
-#search:focus{outline:none; border-color:var(--accent)}
-.tabs{display:flex; gap:2px}
-.tab{flex:1; text-align:center; padding:9px 4px; font-size:13.5px; color:var(--muted);
-  border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap}
-.tab.active{color:var(--text); border-color:var(--accent); font-weight:600}
-.chips{display:flex; gap:6px; overflow-x:auto; padding:10px 14px 6px; scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none; padding:4px 11px; border-radius:14px; background:var(--chip);
-  border:1px solid var(--border); color:var(--muted); font-size:12.5px; cursor:pointer}
-.chip.active{background:var(--accent); color:#0d1117; border-color:var(--accent); font-weight:600}
-.chip .cnt{opacity:.65; margin-left:5px; font-size:11px}
-.tab .cnt{opacity:.6; margin-left:4px; font-size:11px}
-.sortlabel{flex:none; color:var(--muted); font-size:12px; padding:4px 2px 4px 0; align-self:center}
-#list{padding:6px 12px}
-.card{background:var(--panel); border:1px solid var(--border); border-radius:10px;
-  padding:11px 13px; margin-bottom:9px; cursor:pointer}
-.card.expanded{background:var(--panel2)}
-.cardtop{display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:6px}
-.rid{font-weight:700; font-size:13px; color:var(--accent)}
-.badge{font-size:11px; padding:2px 8px; border-radius:10px; background:var(--chip); color:var(--muted)}
-.pill{font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; margin-left:auto}
-.pill.open{background:rgba(63,185,80,.15); color:var(--open)}
-.pill.overdue{background:rgba(248,81,73,.15); color:var(--overdue)}
-.pill.resolved{background:rgba(139,148,158,.15); color:var(--resolved)}
-.pill.standing{background:rgba(88,166,255,.15); color:var(--accent)}
-.pill.needsme{background:rgba(210,153,34,.18); color:var(--note)}
-.due{font-size:11.5px; color:var(--muted)}
-.due.past{color:var(--overdue); font-weight:600}
-.rtext{font-size:14px; color:var(--text)}
-.card:not(.expanded) .rtext{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden}
-.rtext b{color:#fff}
-.wl{color:var(--accent); background:rgba(88,166,255,.08); border-radius:4px; padding:0 3px}
-.rtext code{background:var(--chip); border-radius:4px; padding:0 4px; font-size:12.5px}
-.meta{margin-top:7px; font-size:12px; color:var(--muted)}
-.resol{margin-top:7px; padding:7px 9px; background:rgba(210,153,34,.07);
-  border-left:2px solid var(--note); border-radius:0 6px 6px 0; font-size:12.5px; color:var(--muted)}
-.actions{display:flex; gap:7px; margin-top:10px; flex-wrap:wrap}
-.abtn{padding:7px 12px; border-radius:7px; border:1px solid var(--border);
-  background:var(--chip); color:var(--text); font-size:12.5px; cursor:pointer}
-.abtn.green{border-color:var(--open); color:var(--open)}
-.abtn.red{border-color:var(--overdue); color:var(--overdue)}
-.abtn:active{opacity:.6}
-#empty{text-align:center; color:var(--muted); padding:50px 20px; font-size:14px}
-#fab{position:fixed; right:18px; bottom:calc(env(safe-area-inset-bottom) + 20px);
-  width:54px; height:54px; border-radius:50%; background:var(--accent); color:#0d1117;
-  font-size:28px; border:none; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.5); z-index:20}
-.sheet-bg{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:30; display:none}
-.sheet-bg.show{display:block}
-.sheet{position:fixed; left:0; right:0; bottom:0; z-index:31; background:var(--panel);
-  border-radius:16px 16px 0 0; border-top:1px solid var(--border);
-  padding:18px 16px calc(env(safe-area-inset-bottom) + 18px); max-height:88vh; overflow-y:auto;
-  transform:translateY(105%); transition:transform .22s ease}
-.sheet.show{transform:none}
-.sheet h2{font-size:16px; margin:0 0 14px}
-.sheet label{display:block; font-size:12.5px; color:var(--muted); margin:12px 0 4px}
-.sheet input[type=text],.sheet input[type=date],.sheet textarea,.sheet select{
-  width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border);
-  background:var(--bg); color:var(--text); font-size:15px; font-family:inherit}
-.sheet textarea{min-height:84px; resize:vertical}
-.seg{display:flex; gap:6px}
-.seg button{flex:1; padding:9px; border-radius:8px; border:1px solid var(--border);
-  background:var(--bg); color:var(--muted); font-size:14px; cursor:pointer}
-.seg button.active{border-color:var(--accent); color:var(--accent); font-weight:600}
-.primary{width:100%; margin-top:18px; padding:12px; border-radius:9px; border:none;
-  background:var(--accent); color:#0d1117; font-size:15px; font-weight:700; cursor:pointer}
-.primary:disabled{opacity:.4}
-.ghost{width:100%; margin-top:8px; padding:10px; border-radius:9px; border:1px solid var(--border);
-  background:none; color:var(--muted); font-size:14px; cursor:pointer}
-.hint{font-size:12px; color:var(--muted); line-height:1.5; margin-top:10px}
-.hint a{color:var(--accent)}
-#toast{position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 88px);
-  transform:translateX(-50%); background:var(--panel2); border:1px solid var(--border);
-  color:var(--text); padding:9px 16px; border-radius:9px; font-size:13.5px; z-index:50;
-  display:none; max-width:86vw; text-align:center}
+html{background:var(--b)}
+body{margin:0; background:var(--b); color:var(--t);
+  font:400 14px/1.5 "IBM Plex Sans",sans-serif}
+button{font-family:inherit; cursor:pointer}
+input,textarea{font-family:inherit}
+.mono{font-family:"IBM Plex Mono",monospace}
+.wrap{max-width:1120px; margin:0 auto; padding:0 32px 96px}
+@keyframes oqfade{from{opacity:0; transform:translateY(-4px)}to{opacity:1; transform:none}}
+
+/* ---------- header ---------- */
+header{position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+  background:var(--hb); border-bottom:1px solid var(--d)}
+.hrow{max-width:1120px; margin:0 auto; padding:18px 32px 0; display:flex; gap:20px; align-items:center}
+.htitle{font:700 22px "Space Grotesk",sans-serif; letter-spacing:-0.02em; color:var(--t)}
+.hsync{font:400 11px "IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:0.06em; color:var(--dm)}
+.hspace{flex:1}
+.prog{border:1px solid var(--d); border-radius:10px; background:var(--s); padding:8px 14px}
+.prog .pl{font-size:11px; color:var(--m); margin-bottom:4px; display:flex; gap:10px; align-items:center}
+.ptrack{width:104px; height:5px; border-radius:99px; background:var(--s2); overflow:hidden}
+.pfill{height:100%; background:var(--g); border-radius:99px}
+.pcount{font:500 12px "IBM Plex Mono",monospace; color:var(--g)}
+.ibtn{width:38px; height:38px; border-radius:10px; border:1px solid var(--d); background:var(--s);
+  color:var(--m); font-size:16px; flex-shrink:0}
+.ibtn:hover{border-color:var(--d2); color:var(--t)}
+.tabs{max-width:1120px; margin:0 auto; padding:0 32px; display:flex; gap:4px}
+.tab{border:none; background:none; padding:10px 14px 12px; font:600 14px "IBM Plex Sans",sans-serif;
+  color:var(--m); border-bottom:2px solid transparent; display:flex; gap:7px; align-items:center}
+.tab[aria-selected="true"]{color:var(--t); border-bottom-color:var(--t)}
+.tab .cnt{font:400 11px "IBM Plex Mono",monospace; padding:2px 6px; border-radius:5px; background:var(--s2); color:var(--m)}
+
+/* ---------- needs-you strip ---------- */
+.strip{margin-top:28px; border:1px solid var(--ad); border-radius:14px; background:var(--ab); overflow:hidden}
+.striphead{padding:14px 20px 12px; border-bottom:1px solid var(--ad); display:flex; gap:10px; align-items:center}
+.stripdot{width:7px; height:7px; border-radius:99px; background:var(--a); flex-shrink:0}
+.striplabel{font:600 12px "Space Grotesk",sans-serif; text-transform:uppercase; letter-spacing:0.1em; color:var(--a)}
+.stripsum{font-size:12px; color:var(--m)}
+.striprow{display:grid; grid-template-columns:44px 1fr auto auto; gap:16px; align-items:center;
+  padding:13px 20px; border-top:1px solid var(--ad); cursor:pointer; background:none; width:100%; border-left:none; border-right:none; border-bottom:none; text-align:left; font:inherit; color:inherit}
+.striprow:hover{background:var(--abh)}
+.striprow .q{font-size:15px; text-wrap:pretty}
+.striprow .dom{font-size:12px; color:var(--m)}
+.striprow .due{font:500 12px "IBM Plex Mono",monospace; color:var(--a); white-space:nowrap}
+
+/* ---------- list header + toolbar ---------- */
+.listhead{margin:32px 0 16px; display:flex; gap:12px; align-items:center}
+.listhead h2{font:600 15px "Space Grotesk",sans-serif; margin:0; white-space:nowrap; flex-shrink:0}
+.rule{height:1px; background:var(--d); flex:1}
+.newbtn{font:600 12px "IBM Plex Sans",sans-serif; color:var(--onG); background:var(--g); border:none;
+  border-radius:8px; padding:7px 13px; white-space:nowrap; flex-shrink:0}
+.toolbar{margin-bottom:18px; padding:10px 12px; border:1px solid var(--d); border-radius:12px;
+  background:var(--s); display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.tgroup{display:flex; gap:6px; align-items:center; flex-shrink:0; white-space:nowrap}
+.tlabel{font-size:11px; text-transform:uppercase; color:var(--dm)}
+.tdivider{width:1px; height:22px; background:var(--d); flex-shrink:0}
+.searchwrap{flex:1; min-width:0; display:flex; gap:8px; align-items:center}
+.searchwrap .glyph{font-size:13px; color:var(--dm)}
+.searchwrap input{flex:1; min-width:0; border:none; background:transparent; font-size:13px; color:var(--t); outline:none}
+.pill{font:500 12px "IBM Plex Sans",sans-serif; padding:5px 10px; border-radius:7px;
+  white-space:nowrap; flex-shrink:0; border:1px solid var(--d); background:transparent; color:var(--m)}
+.pill[aria-pressed="true"]{border-color:transparent; background:var(--s2); color:var(--t)}
+.pill.blue[aria-pressed="true"]{background:var(--ub); color:var(--u)}
+.pill.purple[aria-pressed="true"]{background:var(--pb); color:var(--p)}
+.clearbtn{font-size:12px; color:var(--m); text-decoration:underline; border:none; background:none}
+
+/* ---------- composer ---------- */
+.composer{margin-bottom:20px; border:1px solid var(--d2); border-radius:14px; background:var(--s);
+  padding:18px 20px; animation:oqfade 180ms ease-out}
+.ctoggle{display:flex; gap:8px; margin-bottom:14px}
+.ctoggle button{font:600 12px "IBM Plex Sans",sans-serif; padding:7px 13px; border-radius:8px;
+  border:1px solid var(--d); background:var(--s); color:var(--m)}
+.ctoggle button.oq-on{border-color:transparent; background:var(--ub); color:var(--u)}
+.ctoggle button.cn-on{border-color:transparent; background:var(--pb); color:var(--p)}
+.cq{width:100%; background:var(--s2); border:1px solid var(--d); border-radius:9px; padding:12px 14px;
+  font-size:15px; color:var(--t); margin-bottom:10px; outline:none}
+.crow{display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:10px}
+.crow input{background:var(--s2); border:1px solid var(--d); border-radius:9px; padding:10px 12px;
+  font-size:13px; color:var(--t); outline:none; min-width:0}
+.crow .due-in{font-family:"IBM Plex Mono",monospace}
+.caddbtn{font:600 13px "IBM Plex Sans",sans-serif; color:var(--onG); background:var(--g); border:none;
+  border-radius:9px; padding:0 20px; white-space:nowrap}
+
+/* ---------- groups & rows ---------- */
+.group{margin-bottom:26px}
+.ghead{width:100%; border:none; background:none; padding:0 0 10px; display:flex; gap:10px; align-items:center; text-align:left}
+.gcaret{font-size:10px; color:var(--dm); width:10px; flex-shrink:0}
+.gname{font:600 12px "Space Grotesk",sans-serif; text-transform:uppercase; letter-spacing:0.1em; color:var(--m)}
+.gcount{font:400 11px "IBM Plex Mono",monospace; color:var(--dm)}
+.grows{display:flex; flex-direction:column; gap:8px}
+.row{border:1px solid var(--d); border-radius:12px; background:var(--s); overflow:hidden}
+.rsum{display:grid; grid-template-columns:44px 1fr auto auto 14px; gap:16px; align-items:center;
+  padding:14px 18px; cursor:pointer; width:100%; border:none; background:none; text-align:left; font:inherit; color:inherit}
+.rsum:hover{background:var(--h)}
+.typechip{font:500 11px "IBM Plex Mono",monospace; border-radius:5px; padding:3px 0; text-align:center; border:1px solid}
+.typechip.cn{color:var(--p); border-color:var(--pd)}
+.typechip.oq{color:var(--u); border-color:var(--ud)}
+.rq{font-size:15px; line-height:1.45; text-wrap:pretty; color:var(--t)}
+.rq.resolved{color:var(--m)}
+.badge{font:600 11px "IBM Plex Sans",sans-serif; letter-spacing:0.03em; border-radius:6px;
+  padding:4px 9px; white-space:nowrap}
+.badge.open{color:var(--m); background:var(--s2)}
+.badge.needs{color:var(--u); background:var(--ub)}
+.badge.standing{color:var(--p); background:var(--pb)}
+.badge.resolved{color:var(--g); background:var(--gb)}
+.badge.reopened{color:var(--a); background:var(--ab)}
+.rdue{font:400 12px "IBM Plex Mono",monospace; white-space:nowrap; color:var(--dm)}
+.rdue.over{color:var(--a)}
+.rcaret{font-size:10px; color:var(--dm)}
+.rdetail{border-top:1px solid var(--d); padding:18px; background:var(--s3); animation:oqfade 160ms ease-out}
+.eyebrow{font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dm); margin-bottom:8px}
+.cngrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px}
+.claim{border:1px solid var(--pd); border-radius:10px; background:var(--pb); padding:14px}
+.claim .eyebrow{color:var(--p)}
+.claim .body{font-size:14px; line-height:1.55}
+.claim .body.empty{color:var(--dm); font-style:italic}
+.claim .src{font:400 11px "IBM Plex Mono",monospace; color:var(--m); margin-top:10px}
+.respane{border:1px dashed var(--d2); border-radius:10px; background:var(--s); padding:14px}
+.respane textarea{width:100%; border:none; background:transparent; min-height:76px; resize:vertical;
+  font-size:14px; line-height:1.55; color:var(--t); outline:none}
+.spawn{display:flex; flex-wrap:wrap; gap:8px}
+.spawnchip{font-size:12px; color:var(--u); border:1px solid var(--ud); background:var(--ub);
+  border-radius:7px; padding:6px 10px}
+.oqgrid{display:grid; grid-template-columns:1fr 260px; gap:24px; margin-bottom:16px}
+.note{display:grid; grid-template-columns:78px 1fr; gap:12px; align-items:start}
+.note .nd{font:400 11px "IBM Plex Mono",monospace; color:var(--dm); padding-top:2px}
+.note .nt{font-size:14px; line-height:1.55; text-wrap:pretty}
+.notes{display:flex; flex-direction:column; gap:10px; margin-bottom:12px}
+.noteinput{width:100%; background:var(--s); border:1px solid var(--d); border-radius:9px;
+  padding:10px 12px; font-size:13px; color:var(--t); outline:none}
+.pagelinks{display:flex; flex-direction:column; gap:6px; margin-bottom:16px}
+.pagelinks a{font-size:13px; color:var(--u); text-decoration:none}
+.pagelinks a:hover{text-decoration:underline}
+.agev{font:400 13px "IBM Plex Mono",monospace; color:var(--m)}
+.actionbar{padding-top:14px; border-top:1px solid var(--d); display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.abtn{font:600 12px "IBM Plex Sans",sans-serif; padding:8px 14px; border-radius:8px;
+  white-space:nowrap; flex-shrink:0; border:1px solid var(--d); background:var(--s); color:var(--m)}
+.abtn.on-resolved{border-color:transparent; background:var(--gb); color:var(--g)}
+.abtn.on-reopened{border-color:transparent; background:var(--ab); color:var(--a)}
+.abtn.on-needs{border-color:transparent; background:var(--ub); color:var(--u)}
+.abtn.on-standing{border-color:transparent; background:var(--pb); color:var(--p)}
+.rowid{font:400 11px "IBM Plex Mono",monospace; color:var(--dm); margin-left:auto}
+.irregular{font-size:12px; color:var(--dm); font-style:italic}
+
+/* ---------- empty state ---------- */
+.empty{text-align:center; padding:72px 0; color:var(--dm)}
+.empty .e1{font:500 16px "Space Grotesk",sans-serif; color:var(--m); margin-bottom:6px}
+.empty .e2{font-size:13px}
+
+/* ---------- connection panel ---------- */
+.scrim{position:fixed; inset:0; background:rgba(20,22,26,0.42); z-index:40}
+.panel{position:fixed; top:0; right:0; bottom:0; width:420px; max-width:100vw; z-index:50; background:var(--s);
+  border-left:1px solid var(--d); padding:28px; overflow:auto}
+.panelhead{display:flex; align-items:center; margin-bottom:20px}
+.panelhead h3{font:600 16px "Space Grotesk",sans-serif; margin:0; flex:1}
+.xbtn{border:none; background:none; font-size:18px; color:var(--dm)}
+.connpill{padding:11px 14px; border:1px solid var(--gd); background:var(--gb); border-radius:10px;
+  margin-bottom:20px; display:flex; gap:10px; align-items:center}
+.connpill.off{border-color:var(--ad); background:var(--ab)}
+.conndot{width:7px; height:7px; border-radius:99px; background:var(--g); flex-shrink:0}
+.connpill.off .conndot{background:var(--a)}
+.conntext{font-size:13px; color:var(--g); flex:1}
+.connpill.off .conntext{color:var(--a)}
+.connsync{font:400 11px "IBM Plex Mono",monospace; color:var(--m)}
+.panel label{display:block; font-size:12px; color:var(--m); margin-bottom:6px}
+.tokin{width:100%; background:var(--s2); border:1px solid var(--d); border-radius:9px;
+  padding:11px 13px; font:400 13px "IBM Plex Mono",monospace; color:var(--t); outline:none; margin-bottom:12px}
+.panelbtns{display:flex; gap:8px; margin-bottom:20px}
+.savebtn{flex:1; font:600 13px "IBM Plex Sans",sans-serif; color:var(--onG); background:var(--g);
+  border:none; border-radius:9px; padding:10px}
+.forgetbtn{font:600 13px "IBM Plex Sans",sans-serif; color:var(--r); border:1px solid var(--rd);
+  background:transparent; border-radius:9px; padding:10px 14px}
+.help{font-size:12px; line-height:1.7; color:var(--m); border-top:1px solid var(--d); padding-top:18px}
+.help b{color:var(--t); font-weight:600}
+.help a{color:var(--u)}
+
+#toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--s);
+  border:1px solid var(--d2); color:var(--t); padding:9px 16px; border-radius:9px; font-size:13px;
+  z-index:60; display:none; max-width:86vw; text-align:center}
+
+/* ---------- responsive ---------- */
+@media (max-width:700px){
+  .wrap{padding:0 14px 96px}
+  .hrow{padding:14px 14px 0; gap:10px; flex-wrap:wrap}
+  .tabs{padding:0 14px}
+  .cngrid,.oqgrid{grid-template-columns:1fr}
+  .rsum{grid-template-columns:44px 1fr auto 14px}
+  .rsum .rdue{display:none}
+  .striprow{grid-template-columns:44px 1fr auto}
+  .striprow .dom{display:none}
+  .crow{grid-template-columns:1fr 1fr}
+  .panel{width:100vw}
+}
 </style>
 </head>
 <body>
 
 <header>
   <div class="hrow">
-    <div id="syncdot"></div>
-    <h1>OQ Register<small id="counts"></small></h1>
-    <button class="iconbtn" id="refreshbtn" title="Refresh">⟳</button>
-    <button class="iconbtn" id="settingsbtn" title="Settings">⚙</button>
+    <div class="htitle">OQ Register</div>
+    <div class="hsync" id="synclabel">not synced</div>
+    <div class="hspace"></div>
+    <div class="prog" id="progcard">
+      <div class="pl"><span>Cleared this week</span><span class="pcount" id="pcount">0/5</span></div>
+      <div class="ptrack"><div class="pfill" id="pfill" style="width:0%"></div></div>
+    </div>
+    <button class="ibtn" id="themebtn" title="Theme">☾</button>
+    <button class="ibtn" id="syncbtn" title="Sync">⟳</button>
+    <button class="ibtn" id="connbtn" title="Connection">⚙</button>
   </div>
-  <input id="search" type="search" placeholder="Search text, IDs, pages…">
-  <div class="tabs">
-    <div class="tab active" data-tab="OQ">Open Questions</div>
-    <div class="tab" data-tab="CN">Contradictions</div>
-    <div class="tab" data-tab="AR">Archive</div>
-  </div>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
 </header>
 
-<div class="chips" id="domainchips"></div>
-<div class="chips" id="statuschips" style="padding-top:0"></div>
-<div class="chips" id="sortchips" style="padding-top:0"></div>
-<div id="list"></div>
-<div id="empty" style="display:none">Nothing matches.</div>
-<button id="fab">+</button>
-
-<div class="sheet-bg" id="sheetbg"></div>
-
-<!-- settings / token sheet -->
-<div class="sheet" id="settingsSheet">
-  <h2>Connection</h2>
-  <label>GitHub fine-grained token (repo: llm-wiki, Contents RW)</label>
-  <input type="text" id="tokenInput" placeholder="github_pat_…" autocomplete="off">
-  <button class="primary" id="saveToken">Save & connect</button>
-  <button class="ghost" id="clearToken">Forget token</button>
-  <div class="hint">
-    Mint at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings → fine-grained tokens</a>:
-    resource owner <b>nesks-ai</b>, only repository <b>llm-wiki</b>, permission <b>Contents: read &amp; write</b>.
-    Token stays in this browser only. Edits commit to the private repo; the 3-hourly vault sync carries them home.
+<div class="wrap">
+  <div id="strip"></div>
+  <div class="listhead">
+    <h2 id="listtitle">Open questions</h2>
+    <div class="rule"></div>
+    <button class="newbtn" id="newbtn">＋ New row</button>
   </div>
-  <div class="hint" id="fileinfo"></div>
+  <div id="composer"></div>
+  <div class="toolbar" id="toolbar"></div>
+  <div id="list"></div>
 </div>
 
-<!-- edit sheet -->
-<div class="sheet" id="editSheet">
-  <h2 id="editTitle"></h2>
-  <div id="editBody" style="font-size:13px;color:var(--muted);max-height:24vh;overflow-y:auto"></div>
-  <div id="dueWrap">
-    <label>Due / gate date</label>
-    <input type="date" id="dueInput">
-  </div>
-  <label>Add note (appended — existing notes above are kept)</label>
-  <textarea id="noteInput" placeholder="What you saw, decided, or resolved…"></textarea>
-  <div class="actions" style="margin-top:14px">
-    <button class="abtn green" id="opResolve">✅ Resolve</button>
-    <button class="abtn red" id="opOverdue">⏰ Overdue</button>
-    <button class="abtn" id="opReopen">↺ Reopen</button>
-    <button class="abtn" id="opNeedsMe">🙋 Needs me</button>
-    <button class="abtn" id="opStanding">🧭 Standing</button>
-  </div>
-  <button class="primary" id="opNote">Save note / date only</button>
-</div>
-
-<!-- add sheet -->
-<div class="sheet" id="addSheet">
-  <h2>New row</h2>
-  <div class="seg" id="typeSeg">
-    <button data-t="OQ" class="active">Open question (OQ)</button>
-    <button data-t="CN">Contradiction (CN)</button>
-  </div>
-  <label>Domain</label>
-  <select id="addDomain"></select>
-  <div id="addDueWrap">
-    <label>Due / gate date (optional)</label>
-    <input type="date" id="addDue">
-  </div>
-  <label id="addTextLabel">Question (numbers included)</label>
-  <textarea id="addText"></textarea>
-  <label>Pages (optional, e.g. [[SSL State of Play]])</label>
-  <input type="text" id="addPages" placeholder="—">
-  <button class="primary" id="addSave">Add row</button>
-</div>
-
+<div id="panelroot"></div>
 <div id="toast"></div>
 
 <script>
 'use strict';
+/* ================= GitHub I/O (unchanged machinery) ================= */
 const OWNER='nesks-ai', REPO='llm-wiki', BRANCH='main';
 const PATH='wiki/synthesis/Open-Questions-and-Contradictions.md';
 const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(PATH).replace(/%2F/g,'/')}`;
 const TOKEN_KEY='oq_gh_token';
-
 const SECTIONS={
   CN:{heading:'## Contradictions (CN-xxx)', left:['id','raised','domain'], right:['pages','status','resolution']},
   OQ:{heading:'## Open questions & decision gates (OQ-xxx)', left:['id','raised','due','domain'], right:['pages','status','resolution']},
   AR:{heading:'## Resolved (archive)', left:['id','raised','resolved','domain'], right:['pages','resolution']}
 };
-const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|STANDING|⏰|✅|❌|🙋|^—$|^\s*$/i;
+const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|STANDING|REOPENED|⏰|✅|❌|🙋|^—$|^\s*$/i;
+let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='', lastSync=null;
 
-let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='';
-let tab='OQ', domainFilter='All', statusFilter='All', expanded=null, editRow=null, addType='OQ';
-let sortBy=localStorage.getItem('oq_sort')||'priority';
-
-// ---------- utils ----------
 const $=id=>document.getElementById(id);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 function toast(msg,ms=2600){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms);}
 function b64decode(b64){const bin=atob(b64.replace(/\n/g,''));const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder('utf-8').decode(bytes);}
 function b64encode(str){const bytes=new TextEncoder().encode(str);let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(bin);}
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function splitCells(line){return line.split(/(?<!\\)\|/);}  // keeps leading/trailing empties
+function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function splitCells(line){return line.split(/(?<!\\)\|/);}
 function esc4cell(s){return s.replace(/\|/g,'\\|').replace(/\r?\n/g,' ');}
 function render(md){
   let h=escHtml(md);
-  h=h.replace(/\[\[([^\]]+?)\\\|([^\]]+?)\]\]/g,'<span class="wl">$2</span>');
-  h=h.replace(/\[\[([^\]]+?)\]\]/g,'<span class="wl">$1</span>');
+  h=h.replace(/\[\[([^\]]+?)\\\|([^\]]+?)\]\]/g,'<span style="color:var(--u)">$2</span>');
+  h=h.replace(/\[\[([^\]]+?)\]\]/g,'<span style="color:var(--u)">$1</span>');
   h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
   h=h.replace(/\\\|/g,'|');
   return h;
 }
-function statusClass(s){if(/RESOLVED/i.test(s))return'resolved';if(/OVERDUE|⏰/.test(s))return'overdue';if(/STANDING/i.test(s))return'standing';return'open';}
-function needsMe(s){return /🙋/.test(s||'');}
-function dueDate(s){const m=(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:null;}
+function dateIn(s){const m=(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:null;}
 
-// ---------- parse ----------
+function statusKey(row){
+  const s=row.status||'';
+  if(/RESOLVED/i.test(s))return'resolved';
+  if(/REOPENED/i.test(s))return'reopened';
+  if(/STANDING/i.test(s))return'standing';
+  if(/🙋/.test(s))return'needs';
+  return'open'; // stored ⏰ OVERDUE maps to open; overdue is derived from the date
+}
+function parseNotes(cell,created){
+  if(!cell||cell.trim()==='—'||cell.trim()==='')return[];
+  const parts=cell.split(/(?=(?:📝|✅)\s*\d{4}-\d{2}-\d{2})/);
+  const notes=[];
+  for(const p of parts){
+    const m=p.match(/^(?:📝|✅)\s*(\d{4}-\d{2}-\d{2}):?\s*([\s\S]*)$/);
+    if(m)notes.push({date:m[1],text:m[2].trim()||'(status change)'});
+    else if(p.trim())notes.push({date:created||'',text:p.trim()});
+  }
+  return notes;
+}
+function parsePages(cell){
+  if(!cell)return[];
+  const out=[];const re=/\[\[([^\]\\|]+?)(?:\\\|[^\]]*)?\]\]/g;let m;
+  while((m=re.exec(cell)))out.push(m[1].trim());
+  return out;
+}
 function parse(content){
   EOL=content.includes('\r\n')?'\r\n':'\n';
   lines=content.split(EOL);
@@ -249,27 +330,32 @@ function parse(content){
       const l=lines[i];
       const idm=l.match(/^\|\s*(CN|OQ)-\d+/);
       if(!idm)continue;
-      // classify by ID prefix, not table position — some CN rows physically sit in the OQ table
       const bucket=key==='AR'?'AR':idm[1];
       const layout=key==='AR'?SECTIONS.AR:SECTIONS[idm[1]];
-      const cells=splitCells(l);                 // leading '' before first |
+      const cells=splitCells(l);
       const trail=cells.length>1&&cells[cells.length-1].trim()===''?1:0;
-      const cc=cells.slice(1,cells.length-trail); // content cells
+      const cc=cells.slice(1,cells.length-trail);
       const L=layout.left, R=layout.right, full=L.length+R.length+1;
-      const row={line:i, section:bucket, cells, ccStart:1, ccLen:cc.length, rlen:R.length};
+      const row={line:i, section:bucket, type:idm[1], cells, ccStart:1, ccLen:cc.length, rlen:R.length};
       if(cc.length>=full){
         L.forEach((c,idx)=>row[c]=cc[idx].trim());
         R.forEach((c,idx)=>row[c]=cc[cc.length-R.length+idx].trim());
         row.text=cc.slice(L.length,cc.length-R.length).join('|').trim();
-        // extra pipes in the row: only trust right-anchoring if status cell looks like a status
         row.editable=cc.length===full||key==='AR'||STATUS_RE.test(row.status||'');
         if(!row.editable){row.text=cc.slice(L.length).join('|').trim();row.pages='';row.status='';row.resolution='';}
-      }else{ // short row — display best-effort, never write
+      }else{
         L.forEach((c,idx)=>row[c]=(cc[idx]||'').trim());
         row.text=cc.slice(L.length).join('|').trim();
         row.pages='';row.status=row.status||'';row.resolution='';
         row.editable=false;
       }
+      // derived view-model fields
+      row.created=dateIn(row.raised)||'';
+      row.dueDate=dateIn(row.due)||'';
+      row.sk=key==='AR'?'resolved':statusKey(row);
+      row.resolvedDate=key==='AR'?(dateIn(row.resolved)||''):(row.sk==='resolved'?(dateIn(row.status)||''):'');
+      row.notes=parseNotes(row.resolution,row.created);
+      row.pagesList=parsePages(row.pages);
       model[bucket].push(row);
     }
   }
@@ -294,8 +380,6 @@ function bumpUpdated(note){
   const i=lines.findIndex(l=>l.startsWith('updated:'));
   if(i>=0)lines[i]=`updated: ${today()} (live register: ${note})`;
 }
-
-// ---------- GitHub I/O ----------
 function token(){return localStorage.getItem(TOKEN_KEY)||'';}
 async function ghFetch(){
   const r=await fetch(API+'?ref='+BRANCH,{headers:{Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'},cache:'no-store'});
@@ -305,6 +389,7 @@ async function ghFetch(){
   const j=await r.json();
   sha=j.sha;
   parse(b64decode(j.content));
+  lastSync=Date.now();
 }
 async function ghPut(message){
   const body={message:'live-OQ: '+message, content:b64encode(lines.join(EOL)), sha, branch:BRANCH};
@@ -314,9 +399,7 @@ async function ghPut(message){
   const j=await r.json();
   sha=j.content.sha;
 }
-// apply op (a function that mutates lines via the model), with one conflict retry
-async function commit(op, message){
-  setDot('busy');
+async function commit(op,message){
   try{
     op(); bumpUpdated(message);
     try{ await ghPut(message); }
@@ -326,198 +409,383 @@ async function commit(op, message){
       await ghFetch(); op(); bumpUpdated(message);
       await ghPut(message);
     }
-    parse(lines.join(EOL));       // re-parse to refresh line indices
-    draw(); setDot('ok'); toast('✓ '+message);
+    parse(lines.join(EOL));
+    draw(); toast('✓ '+message);
   }catch(e){
-    setDot('err');
-    if(e.message==='AUTH'){toast('Token rejected — check settings');openSheet('settingsSheet');}
+    if(e.message==='AUTH'){toast('Token rejected — check connection');S.settingsOpen=true;drawPanel();}
     else toast('Failed: '+e.message,4000);
     try{await ghFetch();draw();}catch(_){}
   }
 }
-function setDot(c){$('syncdot').className=c;}
 
-// ---------- UI ----------
-function matchQ(r){const q=$('search').value.trim().toLowerCase();return !q||(r.id+' '+r.text+' '+(r.pages||'')+' '+(r.resolution||'')+' '+r.domain).toLowerCase().includes(q);}
-function matchDomain(r,d){return d==='All'||r.domain===d;}
-function matchStatus(r,s){return s==='All'||(s==='needsme'?needsMe(r.status):statusClass(r.status||'')===s);}
-function rank(r){
-  const sc=statusClass(r.status||'');
-  if(sc==='overdue'||(dueDate(r.due)&&dueDate(r.due)<today()&&sc==='open'))return 0;
-  if(needsMe(r.status))return 1;
-  if(sc==='open')return 2;
-  if(sc==='standing')return 3;
-  return 4; // resolved awaiting archive
+/* ================= state ================= */
+const S={
+  theme:localStorage.getItem('oq_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),
+  tab:'OQ', grouping:'domain', sort:'due', query:'',
+  domainFilter:null, statusFilter:null,
+  openId:null, openGroups:{}, composerOpen:false, composerType:'OQ',
+  draftQ:'',draftDomain:'',draftDue:'',draftPages:'',
+  drafts:{}, settingsOpen:false
+};
+function applyTheme(){document.documentElement.dataset.theme=S.theme==='dark'?'dark':'';
+  $('themebtn').textContent=S.theme==='dark'?'☀':'☾';
+  document.querySelector('meta[name=theme-color]').content=S.theme==='dark'?'#0C0E12':'#F7F6F3';}
+
+/* ================= derived data ================= */
+function liveRows(){return[...model.OQ,...model.CN];}
+function tabRows(){
+  if(S.tab==='AR')return[...model.AR,...liveRows().filter(r=>r.sk==='resolved')];
+  return model[S.tab].filter(r=>r.sk!=='resolved');
+}
+function tabCounts(){
+  return{OQ:model.OQ.filter(r=>r.sk!=='resolved').length,
+         CN:model.CN.filter(r=>r.sk!=='resolved').length,
+         AR:model.AR.length+liveRows().filter(r=>r.sk==='resolved').length};
+}
+function overdueRows(){
+  const t=today();
+  return liveRows().filter(r=>r.sk!=='resolved'&&r.dueDate&&r.dueDate<t)
+    .sort((a,b)=>a.dueDate<b.dueDate?-1:1);
+}
+function clearedThisWeek(){
+  const d=new Date();const dow=(d.getDay()+6)%7; // Mon=0
+  const mon=new Date(d);mon.setDate(d.getDate()-dow);
+  const monS=mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
+  return[...liveRows(),...model.AR].filter(r=>r.resolvedDate&&r.resolvedDate>=monS).length;
+}
+function dueLabel(r){
+  if(!r.dueDate)return'no date';
+  const ms=new Date(r.dueDate)-new Date(today());
+  const n=Math.round(ms/86400000);
+  if(n<-1)return(-n)+'d over'; if(n===-1)return'1d over';
+  if(n===0)return'today'; if(n===1)return'tomorrow';
+  if(n<14)return'in '+n+'d';
+  return r.dueDate.slice(5,7)+'/'+r.dueDate.slice(8,10);
+}
+function matches(r){
+  if(S.domainFilter&&r.domain!==S.domainFilter)return false;
+  if(S.statusFilter&&r.sk!==S.statusFilter)return false;
+  const q=S.query.trim().toLowerCase();
+  if(q&&!((r.id+' '+r.text+' '+r.domain+' '+(r.pages||'')+' '+(r.resolution||'')).toLowerCase().includes(q)))return false;
+  return true;
 }
 function sortRows(rows){
-  const idCmp=(a,b)=>b.id.localeCompare(a.id,undefined,{numeric:true});
-  const dDate=r=>dueDate(r.due||'')||dueDate(r.resolved||'')||'9999-99';
-  const rDate=r=>dueDate(r.raised||'')||'0000';
-  const cmps={
-    priority:(a,b)=>rank(a)-rank(b)||(dDate(a)<dDate(b)?-1:dDate(a)>dDate(b)?1:0)||idCmp(a,b),
-    due:(a,b)=>(dDate(a)<dDate(b)?-1:dDate(a)>dDate(b)?1:0)||idCmp(a,b),
-    newest:(a,b)=>(rDate(b)<rDate(a)?-1:rDate(b)>rDate(a)?1:0)||idCmp(a,b),
-    id:idCmp
-  };
-  return [...rows].sort(cmps[sortBy]||idCmp);
+  const c={
+    due:(a,b)=>(a.dueDate||'9999')<(b.dueDate||'9999')?-1:(a.dueDate||'9999')>(b.dueDate||'9999')?1:0,
+    age:(a,b)=>(a.created||'9999')<(b.created||'9999')?-1:1,
+    domain:(a,b)=>a.domain.localeCompare(b.domain)
+  }[S.sort];
+  return[...rows].sort((a,b)=>c(a,b)||b.id.localeCompare(a.id,undefined,{numeric:true}));
 }
-function activeRows(){
-  return sortRows((model[tab]||[]).filter(r=>matchQ(r)&&matchDomain(r,domainFilter)&&matchStatus(r,statusFilter)));
+function grouped(){
+  const rows=tabRows().filter(matches);
+  const dated=rows.filter(r=>r.dueDate), undated=rows.filter(r=>!r.dueDate);
+  const groups=[];
+  if(S.grouping==='domain'){
+    const names=[];
+    for(const r of dated)if(!names.includes(r.domain))names.push(r.domain);
+    for(const n of names)groups.push({name:n,rows:sortRows(dated.filter(r=>r.domain===n))});
+  }else if(dated.length){
+    groups.push({name:'By date',rows:sortRows(dated)});
+  }
+  if(undated.length)groups.push({name:'No date',rows:sortRows(undated)});
+  return groups;
 }
-function draw(){
-  // counts + chips
-  $('counts').textContent=`${model.OQ.length} OQ · ${model.CN.length} CN`;
-  const tabNames={OQ:'Open Qs',CN:'Contradictions',AR:'Archive'};
-  document.querySelectorAll('.tab').forEach(el=>{const k=el.dataset.tab;el.innerHTML=`${tabNames[k]}<span class="cnt">${model[k].length}</span>`;});
-  const base=(model[tab]||[]).filter(matchQ);   // facet counts respect the OTHER active filters
-  const domains=['All',...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d!=='—'&&d.length<25))];
-  const dcount=d=>base.filter(r=>matchDomain(r,d)&&matchStatus(r,statusFilter)).length;
-  $('domainchips').innerHTML=domains.map(d=>`<div class="chip ${d===domainFilter?'active':''}" data-d="${escHtml(d)}">${escHtml(d)}<span class="cnt">${dcount(d)}</span></div>`).join('');
-  const sts=['All','needsme','open','overdue','standing','resolved'];
-  const stLabel={All:'Any status',needsme:'🙋 needs me',open:'🟢 open',overdue:'⏰ overdue',standing:'🧭 standing',resolved:'✅ resolved'};
-  const scount=s=>base.filter(r=>matchDomain(r,domainFilter)&&matchStatus(r,s)).length;
-  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${stLabel[s]}<span class="cnt">${scount(s)}</span></div>`).join('');
-  const sorts=[['priority','⚡ priority'],['due','📅 due date'],['newest','🕐 newest'],['id','# id']];
-  $('sortchips').innerHTML='<div class="sortlabel">sort</div>'+sorts.map(([k,l])=>`<div class="chip ${k===sortBy?'active':''}" data-sort="${k}">${l}</div>`).join('');
-  // list
-  const rows=activeRows(), t=today();
-  $('empty').style.display=rows.length?'none':'block';
-  $('list').innerHTML=rows.map(r=>{
-    const sc=statusClass(r.status||'RESOLVED');
-    const dd=dueDate(r.due);
-    const past=dd&&dd<t&&sc==='open';
-    return `<div class="card ${expanded===r.id?'expanded':''}" data-id="${r.id}">
-      <div class="cardtop">
-        <span class="rid">${r.id}</span>
-        <span class="badge">${escHtml(r.domain||'')}</span>
-        ${r.due?`<span class="due ${past||sc==='overdue'?'past':''}">📅 ${escHtml(r.due.length>28?(dd||r.due.slice(0,26)+'…'):r.due)}</span>`:''}
-        ${tab!=='AR'?(needsMe(r.status)&&sc==='open'?'<span class="pill needsme">🙋 NEEDS ME</span>':`<span class="pill ${sc}">${sc==='open'?'OPEN':sc==='overdue'?'OVERDUE':sc==='standing'?'STANDING':'RESOLVED'}</span>`):'<span class="pill resolved">ARCHIVED</span>'}
-      </div>
-      <div class="rtext">${render(r.text||'')}</div>
-      ${expanded===r.id?`
-        <div class="meta">raised ${escHtml(r.raised||'')}${r.pages&&r.pages!=='—'?' · '+render(r.pages):''}</div>
-        ${r.resolution&&r.resolution!=='—'?`<div class="resol">${render(r.resolution)}</div>`:''}
-        ${tab!=='AR'?(r.editable?`<div class="actions"><button class="abtn" data-act="edit" data-id="${r.id}">✏️ Update…</button></div>`:`<div class="meta">⚠️ irregular table row — edit it in the vault</div>`):''}
-      `:''}
-    </div>`;
+
+/* ================= rendering ================= */
+function drawHeader(){
+  const cl=clearedThisWeek();
+  $('pcount').textContent=cl+'/5';
+  $('pfill').style.width=Math.min(100,cl*20)+'%';
+  const tc=tabCounts();
+  const names={OQ:'Open Questions',CN:'Contradictions',AR:'Archive'};
+  $('tabs').innerHTML=['OQ','CN','AR'].map(k=>
+    `<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${names[k]}<span class="cnt">${tc[k]}</span></button>`).join('');
+  $('synclabel').textContent=lastSync?('synced '+syncAgo()):'not synced';
+}
+function syncAgo(){
+  const m=Math.round((Date.now()-lastSync)/60000);
+  if(m<1)return'just now'; if(m<60)return m+'m ago';
+  return Math.round(m/60)+'h ago';
+}
+function drawStrip(){
+  const rows=overdueRows();
+  if(!rows.length||S.tab==='AR'){$('strip').innerHTML='';return;}
+  const shown=rows.slice(0,5);
+  $('strip').innerHTML=`<div class="strip">
+    <div class="striphead"><span class="stripdot"></span><span class="striplabel">Needs you now</span>
+      <span class="stripsum">${rows.length} past their gate date${rows.length>shown.length?' — oldest '+shown.length+' pinned, the rest are in the list':''}</span></div>
+    ${shown.map(r=>`<button class="striprow" data-open="${r.id}">
+      <span class="typechip ${r.type.toLowerCase()}">${r.type}</span>
+      <span class="q">${render(firstLine(r.text))}</span>
+      <span class="dom">${escHtml(r.domain)}</span>
+      <span class="due">${dueLabel(r)}</span></button>`).join('')}
+  </div>`;
+}
+function firstLine(t){
+  const s=t.replace(/\[\[([^\]\\|]+?)\\\|([^\]]+?)\]\]/g,'$2').replace(/\[\[([^\]]+?)\]\]/g,'$1');
+  return s.length>180?s.slice(0,177)+'…':s;
+}
+function drawToolbar(){
+  const domains=[...new Set(tabRows().map(r=>r.domain).filter(d=>d&&d!=='—'&&d.length<25))].sort();
+  const anyFilter=S.domainFilter||S.statusFilter||S.query.trim()||S.sort!=='due';
+  const pill=(label,on,extra,attrs)=>`<button class="pill ${extra||''}" aria-pressed="${on}" ${attrs}>${label}</button>`;
+  $('toolbar').innerHTML=`
+    <div class="searchwrap"><span class="glyph">⌕</span>
+      <input id="searchin" placeholder="Search questions, domains, pages…" value="${escHtml(S.query)}" aria-label="Search"></div>
+    <div class="tdivider"></div>
+    <div class="tgroup"><span class="tlabel">Domain</span>
+      ${pill('All',!S.domainFilter,'','data-dom="*"')}
+      ${domains.map(d=>pill(escHtml(d),S.domainFilter===d,'',`data-dom="${escHtml(d)}"`)).join('')}</div>
+    <div class="tdivider"></div>
+    <div class="tgroup"><span class="tlabel">Status</span>
+      ${pill('Any',!S.statusFilter,'','data-st="*"')}
+      ${pill('Needs me',S.statusFilter==='needs','blue','data-st="needs"')}
+      ${pill('Standing',S.statusFilter==='standing','purple','data-st="standing"')}
+      ${pill('Open',S.statusFilter==='open','','data-st="open"')}</div>
+    <div class="tdivider"></div>
+    <div class="tgroup"><span class="tlabel">Sort</span>
+      ${pill('Due',S.sort==='due','','data-sort="due"')}
+      ${pill('Oldest',S.sort==='age','','data-sort="age"')}
+      ${pill('Domain',S.sort==='domain','','data-sort="domain"')}
+      ${pill('Group',S.grouping==='domain','','data-group="1"')}</div>
+    ${anyFilter?'<button class="clearbtn" id="clearbtn">Clear</button>':''}`;
+  const si=$('searchin');
+  si.oninput=()=>{S.query=si.value;drawMain(false);};
+}
+function drawComposer(){
+  if(!S.composerOpen){$('composer').innerHTML='';return;}
+  const isOQ=S.composerType==='OQ';
+  $('composer').innerHTML=`<div class="composer">
+    <div class="ctoggle">
+      <button class="${isOQ?'oq-on':''}" data-ct="OQ">Open question</button>
+      <button class="${!isOQ?'cn-on':''}" data-ct="CN">Contradiction</button>
+    </div>
+    <input class="cq" id="draftq" placeholder="What's the question, or what contradicts what?" value="${escHtml(S.draftQ)}">
+    <div class="crow">
+      <input id="draftdomain" placeholder="Domain" value="${escHtml(S.draftDomain)}" list="domlist">
+      <input id="draftdue" class="due-in" placeholder="Due / gate date (YYYY-MM-DD)" value="${escHtml(S.draftDue)}" ${isOQ?'':'disabled style="opacity:.4"'}>
+      <input id="draftpages" placeholder="Pages ([[SSL State of Play]])" value="${escHtml(S.draftPages)}">
+      <button class="caddbtn" id="caddbtn">Add</button>
+    </div>
+    <datalist id="domlist">${[...new Set(liveRows().map(r=>r.domain).filter(d=>d&&d.length<25))].map(d=>`<option>${escHtml(d)}</option>`).join('')}</datalist>
+  </div>`;
+}
+function badge(sk){const lab={open:'Open',needs:'Needs me',standing:'Standing',resolved:'Resolved',reopened:'Reopened'}[sk];
+  return`<span class="badge ${sk}">${lab}</span>`;}
+function drawMain(withToolbar=true){
+  drawHeader();drawStrip();
+  if(withToolbar)drawToolbar();
+  drawComposer();
+  $('listtitle').textContent={OQ:'Open questions',CN:'Contradictions',AR:'Archive'}[S.tab];
+  const groups=grouped();
+  if(!groups.length){
+    $('list').innerHTML='<div class="empty"><div class="e1">Nothing here.</div><div class="e2">Clear ground, or add a row.</div></div>';
+    return;
+  }
+  const t=today();
+  $('list').innerHTML=groups.map(g=>{
+    const open=S.openGroups[g.name]!==false;
+    return`<section class="group">
+      <button class="ghead" data-g="${escHtml(g.name)}">
+        <span class="gcaret">${open?'▾':'▸'}</span>
+        <span class="gname">${escHtml(g.name)}</span>
+        <span class="gcount">${g.rows.length}</span>
+        <span class="rule"></span></button>
+      ${open?`<div class="grows">${g.rows.map(r=>rowHtml(r,t)).join('')}</div>`:''}
+    </section>`;
   }).join('');
 }
+function rowHtml(r,t){
+  const over=r.dueDate&&r.dueDate<t&&r.sk!=='resolved';
+  const openRow=S.openId===r.id;
+  return`<article class="row" data-id="${r.id}">
+    <button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
+      <span class="typechip ${r.type.toLowerCase()}">${r.type}</span>
+      <span class="rq ${r.sk==='resolved'?'resolved':''}">${render(firstLine(r.text))}</span>
+      ${badge(r.sk)}
+      <span class="rdue ${over?'over':''}">${dueLabel(r)}</span>
+      <span class="rcaret">${openRow?'▾':'▸'}</span>
+    </button>
+    ${openRow?detailHtml(r):''}
+  </article>`;
+}
+function detailHtml(r){
+  const body=r.type==='CN'?cnBody(r):oqBody(r);
+  const act=(k,g,lab)=>`<button class="abtn ${r.sk===k?'on-'+k:''}" data-act="${k}" data-id="${r.id}">${g} ${lab}</button>`;
+  return`<div class="rdetail">${body}
+    <div class="actionbar">
+      ${r.editable&&r.section!=='AR'?
+        act('resolved','✓','Resolve')+act('reopened','↺','Reopen')+act('needs','🙋','Needs me')+act('standing','🧭','Standing')
+        :(r.section==='AR'?'':'<span class="irregular">⚠️ irregular table row — edit it in the vault</span>')}
+      <span class="rowid">${r.id}</span>
+    </div></div>`;
+}
+function cnBody(r){
+  const draft=S.drafts['r'+r.id]!==undefined?S.drafts['r'+r.id]:(r.resolution&&r.resolution!=='—'?r.resolution.replace(/\\\|/g,'|'):'');
+  return`<div class="cngrid">
+    <div class="claim"><div class="eyebrow">Claim A</div><div class="body empty">Not yet split — full text above; fill claims when the row is next worked.</div></div>
+    <div class="claim"><div class="eyebrow">Claim B</div><div class="body empty">—</div></div>
+    <div class="respane"><div class="eyebrow">Resolution</div>
+      <textarea data-res="${r.id}" placeholder="Which side holds, and why?">${escHtml(draft)}</textarea></div>
+  </div>
+  ${pagesBlock(r)}`;
+}
+function oqBody(r){
+  return`<div class="oqgrid">
+    <div><div class="eyebrow">Notes</div>
+      <div class="notes">${r.notes.length?r.notes.map(n=>`<div class="note"><span class="nd">${n.date?n.date.slice(5,7)+'/'+n.date.slice(8,10):'—'}</span><span class="nt">${render(n.text)}</span></div>`).join(''):'<div class="note"><span class="nd">—</span><span class="nt" style="color:var(--dm)">No notes yet.</span></div>'}</div>
+      ${r.editable?`<input class="noteinput" data-note="${r.id}" placeholder="Append a note…" value="${escHtml(S.drafts['n'+r.id]||'')}">`:''}
+    </div>
+    <div>
+      ${r.pagesList.length?`<div class="eyebrow">Pages</div><div class="pagelinks">${r.pagesList.map(p=>`<a href="https://github.com/${OWNER}/${REPO}/search?q=${encodeURIComponent('filename:'+p)}" target="_blank" rel="noopener">${escHtml(p)}</a>`).join('')}</div>`:''}
+      <div class="eyebrow">Open since</div>
+      <div class="agev">${r.created?Math.max(0,Math.round((new Date(today())-new Date(r.created))/86400000))+' days':'—'}</div>
+    </div>
+  </div>`;
+}
+function pagesBlock(r){
+  if(!r.pagesList.length)return'';
+  return`<div style="margin-bottom:16px"><div class="eyebrow">Pages</div><div class="spawn">${
+    r.pagesList.map(p=>`<a class="spawnchip" style="text-decoration:none" href="https://github.com/${OWNER}/${REPO}/search?q=${encodeURIComponent('filename:'+p)}" target="_blank" rel="noopener">${escHtml(p)}</a>`).join('')}</div></div>`;
+}
+function drawPanel(){
+  if(!S.settingsOpen){$('panelroot').innerHTML='';return;}
+  const connected=!!token();
+  $('panelroot').innerHTML=`<div class="scrim" id="scrim"></div>
+  <div class="panel">
+    <div class="panelhead"><h3>Connection</h3><button class="xbtn" id="xbtn">✕</button></div>
+    <div class="connpill ${connected?'':'off'}"><span class="conndot"></span>
+      <span class="conntext">${connected?'Connected to llm-wiki':'Not connected'}</span>
+      <span class="connsync">${lastSync?('synced '+syncAgo()):''}</span></div>
+    <label>GitHub fine-grained token</label>
+    <input type="password" class="tokin" id="tokin" placeholder="github_pat_…" value="${escHtml(token())}">
+    <div class="panelbtns">
+      <button class="savebtn" id="savetok">Save &amp; connect</button>
+      <button class="forgetbtn" id="forgettok">Forget</button>
+    </div>
+    <div class="help">
+      Mint at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings → fine-grained tokens</a>:
+      resource owner <b>nesks-ai</b>, only repository <b>llm-wiki</b>, permission <b>Contents: read &amp; write</b>.
+      Token stays in this browser only. Edits commit to the private repo; the 3-hourly vault sync carries them home.
+      ${fmUpdated?'<br><br>Register last updated: '+escHtml(fmUpdated.replace(/\*\*/g,'')).slice(0,140):''}
+    </div>
+  </div>`;
+}
+function draw(){drawMain(true);drawPanel();}
+
+/* ================= actions ================= */
+function setStatus(r,sk){
+  const cur=r.sk;
+  const next=(cur===sk)?'open':sk;
+  const val={open:'OPEN',needs:'OPEN 🙋',standing:'STANDING',
+    resolved:'✅ RESOLVED '+today()+' (live)',reopened:'REOPENED '+today()+' (live)'}[next];
+  const msg=r.id+' → '+next;
+  commit(()=>{const row=findRow(r.id);setCell(row,'status',val);},msg);
+}
 function findRow(id){for(const k of['CN','OQ','AR'])for(const r of model[k])if(r.id===id)return r;return null;}
-
-// ---------- sheets ----------
-function openSheet(id){$('sheetbg').classList.add('show');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show'));$(id).classList.add('show');}
-function closeSheets(){$('sheetbg').classList.remove('show');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show'));}
-$('sheetbg').onclick=closeSheets;
-
-// settings
-$('settingsbtn').onclick=()=>{$('tokenInput').value=token();$('fileinfo').textContent=fmUpdated?('Register last updated: '+fmUpdated.replace(/\*\*/g,'')):'';openSheet('settingsSheet');};
-$('saveToken').onclick=async()=>{localStorage.setItem(TOKEN_KEY,$('tokenInput').value.trim());closeSheets();await load();};
-$('clearToken').onclick=()=>{localStorage.removeItem(TOKEN_KEY);$('tokenInput').value='';toast('Token cleared');};
-
-// edit
-function openEdit(id){
-  const r=findRow(id); if(!r)return;
-  editRow=r;
-  $('editTitle').textContent=r.id+' · '+r.domain;
-  $('editBody').innerHTML=render(r.text||'')
-    +((r.resolution&&r.resolution!=='—')?'<div class="resol" style="margin-top:8px">'+render(r.resolution)+'</div>':'');
-  $('dueWrap').style.display=r.section==='OQ'?'':'none';
-  $('dueInput').value=dueDate(r.due)||'';
-  $('noteInput').value='';
-  openSheet('editSheet');
-}
-function noteText(){return $('noteInput').value.trim();}
-function applyResolution(r,label){
-  const n=noteText();
-  const add=label+(n?': '+n:'');
+function appendNote(r,text){
   const cur=(r.resolution&&r.resolution!=='—')?r.resolution+' ':'';
-  setCell(r,'resolution',cur+add);
+  commit(()=>{const row=findRow(r.id);setCell(row,'resolution',cur+'📝 '+today()+': '+text);},r.id+' note');
 }
-$('opResolve').onclick=()=>{const r=editRow;closeSheets();
-  commit(()=>{const row=findRow(r.id);setCell(row,'status','✅ RESOLVED '+today()+' (live)');applyResolution(row,'✅ '+today());maybeDue(row);},r.id+' resolved');};
-$('opOverdue').onclick=()=>{const r=editRow;closeSheets();
-  commit(()=>{const row=findRow(r.id);setCell(row,'status','⏰ OVERDUE');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' flagged overdue');};
-$('opReopen').onclick=()=>{const r=editRow;closeSheets();
-  commit(()=>{const row=findRow(r.id);setCell(row,'status','OPEN');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' reopened');};
-$('opNeedsMe').onclick=()=>{const r=editRow;closeSheets();
-  commit(()=>{const row=findRow(r.id);setCell(row,'status','OPEN 🙋');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' flagged needs-me');};
-$('opStanding').onclick=()=>{const r=editRow;closeSheets();
-  commit(()=>{const row=findRow(r.id);setCell(row,'status','STANDING');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' set standing');};
-$('opNote').onclick=()=>{const r=editRow;
-  if(!noteText()&&!( r.section==='OQ'&&$('dueInput').value&&$('dueInput').value!==dueDate(r.due))){toast('Nothing to save');return;}
-  closeSheets();
-  commit(()=>{const row=findRow(r.id);if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' note');};
-function maybeDue(row){
-  if(row.section!=='OQ')return;
-  const v=$('dueInput').value;
-  if(v&&v!==dueDate(row.due))setCell(row,'due',v);
+function saveResolution(r,text){
+  commit(()=>{const row=findRow(r.id);setCell(row,'resolution',text.trim()||'—');},r.id+' resolution');
 }
-
-// add
-$('fab').onclick=()=>{
-  const domains=[...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d.length<20))];
-  $('addDomain').innerHTML=domains.map(d=>`<option>${escHtml(d)}</option>`).join('');
-  $('addText').value='';$('addPages').value='';$('addDue').value='';
-  setAddType(tab==='CN'?'CN':'OQ');
-  openSheet('addSheet');
-};
-function setAddType(t){addType=t;
-  document.querySelectorAll('#typeSeg button').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
-  $('addDueWrap').style.display=t==='OQ'?'':'none';
-  $('addTextLabel').textContent=t==='OQ'?'Question (numbers included)':'Contradiction (one line, numbers included)';
-}
-document.querySelectorAll('#typeSeg button').forEach(b=>b.onclick=()=>setAddType(b.dataset.t));
-$('addSave').onclick=()=>{
-  const text=$('addText').value.trim();
-  if(!text){toast('Write the row text first');return;}
-  const domain=$('addDomain').value, pages=$('addPages').value.trim()||'—';
-  const due=$('addDue').value||'—';
-  const t=addType; closeSheets();
+function addRow(){
+  const q=S.draftQ.trim();
+  if(!q)return;
+  const type=S.composerType, domain=S.draftDomain.trim()||'Cross';
+  const due=dateIn(S.draftDue)||'—', pages=S.draftPages.trim()||'—';
   let newId='';
   commit(()=>{
-    newId=nextId(t);
-    const c=esc4cell.bind(null);
-    const rowLine=t==='CN'
-      ?`| ${newId} | ${today()} | ${c(domain)} | ${c(text)} | ${c(pages)} | OPEN | — |`
-      :`| ${newId} | ${today()} | ${c(due)} | ${c(domain)} | ${c(text)} | ${c(pages)} | OPEN | — |`;
-    // insert after last row of that section's table
-    const sec=SECTIONS[t];
+    newId=nextId(type);
+    const c=esc4cell;
+    const rowLine=type==='CN'
+      ?`| ${newId} | ${today()} | ${c(domain)} | ${c(q)} | ${c(pages)} | OPEN | — |`
+      :`| ${newId} | ${today()} | ${c(due)} | ${c(domain)} | ${c(q)} | ${c(pages)} | OPEN | — |`;
+    const sec=SECTIONS[type];
     const start=lines.findIndex(l=>l.trim()===sec.heading);
     let end=lines.length;
     for(let i=start+1;i<lines.length;i++){if(lines[i].startsWith('## ')){end=i;break;}}
     let last=-1;
     for(let i=start+1;i<end;i++)if(/^\|\s*(CN|OQ)-\d+/.test(lines[i]))last=i;
     lines.splice(last>=0?last+1:start+3,0,rowLine);
-  },(newId||t+'-new')+' raised from live register');
-};
+  },(newId||type)+' raised from live register');
+  S.tab=type; S.composerOpen=false;
+  S.draftQ=S.draftDomain=S.draftDue=S.draftPages='';
+}
 
-// tabs / chips / cards / search
-document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{tab=el.dataset.tab;statusFilter='All';expanded=null;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===el));draw();});
-$('domainchips').onclick=e=>{const c=e.target.closest('.chip');if(c){domainFilter=c.dataset.d;draw();}};
-$('statuschips').onclick=e=>{const c=e.target.closest('.chip');if(c){statusFilter=c.dataset.s;draw();}};
-$('sortchips').onclick=e=>{const c=e.target.closest('.chip');if(c){sortBy=c.dataset.sort;localStorage.setItem('oq_sort',sortBy);draw();}};
-$('list').onclick=e=>{
-  const b=e.target.closest('[data-act="edit"]');
-  if(b){e.stopPropagation();openEdit(b.dataset.id);return;}
-  const card=e.target.closest('.card');
-  if(card){expanded=expanded===card.dataset.id?null:card.dataset.id;draw();}
-};
-$('search').oninput=()=>draw();
-$('refreshbtn').onclick=()=>load();
+/* ================= events (delegated) ================= */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab],[data-open],[data-g],[data-dom],[data-st],[data-sort],[data-group],[data-ct],[data-act],#newbtn,#caddbtn,#clearbtn,#themebtn,#syncbtn,#connbtn,#scrim,#xbtn,#savetok,#forgettok');
+  if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;S.openId=null;draw();return;}
+  if(t.dataset.open!==undefined&&t.dataset.open){
+    const r=findRow(t.dataset.open);
+    if(r&&r.section!=='AR'&&S.tab!=='AR'&&r.type!==S.tab)S.tab=r.type;
+    S.openId=S.openId===t.dataset.open?null:t.dataset.open;
+    drawMain(false);return;}
+  if(t.dataset.g){S.openGroups[t.dataset.g]=S.openGroups[t.dataset.g]===false;drawMain(false);return;}
+  if(t.dataset.dom){S.domainFilter=t.dataset.dom==='*'?null:t.dataset.dom;drawMain();return;}
+  if(t.dataset.st){S.statusFilter=t.dataset.st==='*'?null:t.dataset.st;drawMain();return;}
+  if(t.dataset.sort){S.sort=t.dataset.sort;drawMain();return;}
+  if(t.dataset.group){S.grouping=S.grouping==='domain'?'date':'domain';drawMain();return;}
+  if(t.dataset.ct){S.composerType=t.dataset.ct;syncDrafts();drawComposer();return;}
+  if(t.dataset.act){e.stopPropagation();setStatus(findRow(t.dataset.id),t.dataset.act);return;}
+  switch(t.id){
+    case'newbtn':S.composerOpen=!S.composerOpen;drawComposer();break;
+    case'caddbtn':syncDrafts();addRow();break;
+    case'clearbtn':S.query='';S.domainFilter=null;S.statusFilter=null;S.sort='due';drawMain();break;
+    case'themebtn':S.theme=S.theme==='dark'?'light':'dark';localStorage.setItem('oq_theme',S.theme);applyTheme();break;
+    case'syncbtn':load();break;
+    case'connbtn':S.settingsOpen=true;drawPanel();break;
+    case'scrim':case'xbtn':S.settingsOpen=false;drawPanel();break;
+    case'savetok':localStorage.setItem(TOKEN_KEY,document.getElementById('tokin').value.trim());S.settingsOpen=false;drawPanel();load();break;
+    case'forgettok':localStorage.removeItem(TOKEN_KEY);toast('Token cleared');drawPanel();break;
+  }
+});
+function syncDrafts(){
+  const g=id=>{const el=$(id);return el?el.value:'';};
+  S.draftQ=g('draftq');S.draftDomain=g('draftdomain');S.draftDue=g('draftdue');S.draftPages=g('draftpages');
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  const n=e.target.closest('[data-note]');
+  if(n&&n.value.trim()){const r=findRow(n.dataset.note);S.drafts['n'+r.id]='';appendNote(r,n.value.trim());}
+  if(e.target.id==='draftq'||e.target.closest('.crow')){if(e.target.tagName==='INPUT'){syncDrafts();addRow();}}
+});
+document.addEventListener('input',e=>{
+  const n=e.target.closest('[data-note]');if(n)S.drafts['n'+n.dataset.note]=n.value;
+  const rr=e.target.closest('[data-res]');if(rr)S.drafts['r'+rr.dataset.res]=rr.value;
+});
+document.addEventListener('focusout',e=>{
+  const rr=e.target.closest&&e.target.closest('[data-res]');
+  if(rr){const r=findRow(rr.dataset.res);
+    const orig=(r.resolution&&r.resolution!=='—')?r.resolution.replace(/\\\|/g,'|'):'';
+    if(rr.value.trim()!==orig.trim()){delete S.drafts['r'+r.id];saveResolution(r,rr.value);}}
+});
+setInterval(()=>{if(lastSync)$('synclabel').textContent='synced '+syncAgo();},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token())load(true);});
 
-// ---------- boot ----------
+/* ================= boot ================= */
 async function load(quiet){
-  if(!token()){openSheet('settingsSheet');return;}
-  setDot('busy');
-  try{await ghFetch();draw();setDot('ok');if(!quiet)toast('Synced');}
-  catch(e){setDot('err');
-    if(e.message==='AUTH'){toast('Token needed / rejected');openSheet('settingsSheet');}
-    else toast('Load failed: '+e.message,4000);}
+  if(!token()){
+    if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){
+      try{const r=await fetch('oq.md');if(r.ok){window.__loadMarkdown(await r.text());return;}}catch(_){}
+    }
+    S.settingsOpen=true;draw();return;
+  }
+  try{await ghFetch();draw();if(!quiet)toast('Synced');}
+  catch(e){
+    if(e.message==='AUTH'){toast('Token needed / rejected');S.settingsOpen=true;draw();}
+    else toast('Load failed: '+e.message,4000);
+  }
 }
-// test hook: allows loading raw markdown without a token (read-only preview)
-window.__loadMarkdown=md=>{parse(md);draw();setDot('ok');};
+window.__loadMarkdown=md=>{parse(md);lastSync=Date.now();draw();};
+const __tq=new URLSearchParams(location.search).get('theme');
+if(__tq==='light'||__tq==='dark')S.theme=__tq;
+applyTheme();
+draw();
 load();
 </script>
 </body>
