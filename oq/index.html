@@ -54,6 +54,8 @@ h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
 .pill.open{background:rgba(63,185,80,.15); color:var(--open)}
 .pill.overdue{background:rgba(248,81,73,.15); color:var(--overdue)}
 .pill.resolved{background:rgba(139,148,158,.15); color:var(--resolved)}
+.pill.standing{background:rgba(88,166,255,.15); color:var(--accent)}
+.pill.needsme{background:rgba(210,153,34,.18); color:var(--note)}
 .due{font-size:11.5px; color:var(--muted)}
 .due.past{color:var(--overdue); font-weight:600}
 .rtext{font-size:14px; color:var(--text)}
@@ -158,6 +160,8 @@ h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
     <button class="abtn green" id="opResolve">✅ Resolve</button>
     <button class="abtn red" id="opOverdue">⏰ Overdue</button>
     <button class="abtn" id="opReopen">↺ Reopen</button>
+    <button class="abtn" id="opNeedsMe">🙋 Needs me</button>
+    <button class="abtn" id="opStanding">🧭 Standing</button>
   </div>
   <button class="primary" id="opNote">Save note / date only</button>
 </div>
@@ -196,7 +200,7 @@ const SECTIONS={
   OQ:{heading:'## Open questions & decision gates (OQ-xxx)', left:['id','raised','due','domain'], right:['pages','status','resolution']},
   AR:{heading:'## Resolved (archive)', left:['id','raised','resolved','domain'], right:['pages','resolution']}
 };
-const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|⏰|✅|❌|^—$|^\s*$/i;
+const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|STANDING|⏰|✅|❌|🙋|^—$|^\s*$/i;
 
 let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='';
 let tab='OQ', domainFilter='All', statusFilter='All', expanded=null, editRow=null, addType='OQ';
@@ -219,7 +223,8 @@ function render(md){
   h=h.replace(/\\\|/g,'|');
   return h;
 }
-function statusClass(s){if(/RESOLVED/i.test(s))return'resolved';if(/OVERDUE|⏰/.test(s))return'overdue';return'open';}
+function statusClass(s){if(/RESOLVED/i.test(s))return'resolved';if(/OVERDUE|⏰/.test(s))return'overdue';if(/STANDING/i.test(s))return'standing';return'open';}
+function needsMe(s){return /🙋/.test(s||'');}
 function dueDate(s){const m=(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:null;}
 
 // ---------- parse ----------
@@ -331,16 +336,23 @@ function setDot(c){$('syncdot').className=c;}
 function activeRows(){
   let rows=model[tab]||[];
   if(domainFilter!=='All')rows=rows.filter(r=>r.domain===domainFilter);
-  if(statusFilter!=='All')rows=rows.filter(r=>statusClass(r.status||'')===statusFilter);
+  if(statusFilter==='needsme')rows=rows.filter(r=>needsMe(r.status));
+  else if(statusFilter!=='All')rows=rows.filter(r=>statusClass(r.status||'')===statusFilter);
   const q=$('search').value.trim().toLowerCase();
   if(q)rows=rows.filter(r=>(r.id+' '+r.text+' '+(r.pages||'')+' '+(r.resolution||'')+' '+r.domain).toLowerCase().includes(q));
   if(tab==='OQ'){
     const t=today();
+    const rank=r=>{
+      const sc=statusClass(r.status);
+      if(sc==='overdue'||(dueDate(r.due)&&dueDate(r.due)<t&&sc==='open'))return 0;
+      if(needsMe(r.status))return 1;
+      if(sc==='open')return 2;
+      if(sc==='standing')return 3;
+      return 4; // resolved awaiting archive
+    };
     rows=[...rows].sort((a,b)=>{
-      const sa=statusClass(a.status), sb=statusClass(b.status);
-      const oa=(sa==='overdue'||(dueDate(a.due)&&dueDate(a.due)<t&&sa==='open'))?0:1;
-      const ob=(sb==='overdue'||(dueDate(b.due)&&dueDate(b.due)<t&&sb==='open'))?0:1;
-      if(oa!==ob)return oa-ob;
+      const ra=rank(a), rb=rank(b);
+      if(ra!==rb)return ra-rb;
       const da=dueDate(a.due)||'9999', db=dueDate(b.due)||'9999';
       if(da!==db)return da<db?-1:1;
       return b.id.localeCompare(a.id,undefined,{numeric:true});
@@ -355,8 +367,9 @@ function draw(){
   $('counts').textContent=`${model.OQ.length} OQ · ${model.CN.length} CN`;
   const domains=['All',...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d!=='—'&&d.length<25))];
   $('domainchips').innerHTML=domains.map(d=>`<div class="chip ${d===domainFilter?'active':''}" data-d="${escHtml(d)}">${escHtml(d)}</div>`).join('');
-  const sts=['All','open','overdue','resolved'];
-  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${s==='All'?'Any status':s==='open'?'🟢 open':s==='overdue'?'⏰ overdue':'✅ resolved'}</div>`).join('');
+  const sts=['All','needsme','open','overdue','standing','resolved'];
+  const stLabel={All:'Any status',needsme:'🙋 needs me',open:'🟢 open',overdue:'⏰ overdue',standing:'🧭 standing',resolved:'✅ resolved'};
+  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${stLabel[s]}</div>`).join('');
   // list
   const rows=activeRows(), t=today();
   $('empty').style.display=rows.length?'none':'block';
@@ -369,7 +382,7 @@ function draw(){
         <span class="rid">${r.id}</span>
         <span class="badge">${escHtml(r.domain||'')}</span>
         ${r.due?`<span class="due ${past||sc==='overdue'?'past':''}">📅 ${escHtml(r.due.length>28?(dd||r.due.slice(0,26)+'…'):r.due)}</span>`:''}
-        ${tab!=='AR'?`<span class="pill ${sc}">${sc==='open'?'OPEN':sc==='overdue'?'OVERDUE':'RESOLVED'}</span>`:'<span class="pill resolved">ARCHIVED</span>'}
+        ${tab!=='AR'?(needsMe(r.status)&&sc==='open'?'<span class="pill needsme">🙋 NEEDS ME</span>':`<span class="pill ${sc}">${sc==='open'?'OPEN':sc==='overdue'?'OVERDUE':sc==='standing'?'STANDING':'RESOLVED'}</span>`):'<span class="pill resolved">ARCHIVED</span>'}
       </div>
       <div class="rtext">${render(r.text||'')}</div>
       ${expanded===r.id?`
@@ -417,6 +430,10 @@ $('opOverdue').onclick=()=>{const r=editRow;closeSheets();
   commit(()=>{const row=findRow(r.id);setCell(row,'status','⏰ OVERDUE');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' flagged overdue');};
 $('opReopen').onclick=()=>{const r=editRow;closeSheets();
   commit(()=>{const row=findRow(r.id);setCell(row,'status','OPEN');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' reopened');};
+$('opNeedsMe').onclick=()=>{const r=editRow;closeSheets();
+  commit(()=>{const row=findRow(r.id);setCell(row,'status','OPEN 🙋');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' flagged needs-me');};
+$('opStanding').onclick=()=>{const r=editRow;closeSheets();
+  commit(()=>{const row=findRow(r.id);setCell(row,'status','STANDING');if(noteText())applyResolution(row,'📝 '+today());maybeDue(row);},r.id+' set standing');};
 $('opNote').onclick=()=>{const r=editRow;
   if(!noteText()&&!( r.section==='OQ'&&$('dueInput').value&&$('dueInput').value!==dueDate(r.due))){toast('Nothing to save');return;}
   closeSheets();
