@@ -43,6 +43,9 @@ h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
 .chip{flex:none; padding:4px 11px; border-radius:14px; background:var(--chip);
   border:1px solid var(--border); color:var(--muted); font-size:12.5px; cursor:pointer}
 .chip.active{background:var(--accent); color:#0d1117; border-color:var(--accent); font-weight:600}
+.chip .cnt{opacity:.65; margin-left:5px; font-size:11px}
+.tab .cnt{opacity:.6; margin-left:4px; font-size:11px}
+.sortlabel{flex:none; color:var(--muted); font-size:12px; padding:4px 2px 4px 0; align-self:center}
 #list{padding:6px 12px}
 .card{background:var(--panel); border:1px solid var(--border); border-radius:10px;
   padding:11px 13px; margin-bottom:9px; cursor:pointer}
@@ -125,6 +128,7 @@ h1 small{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px}
 
 <div class="chips" id="domainchips"></div>
 <div class="chips" id="statuschips" style="padding-top:0"></div>
+<div class="chips" id="sortchips" style="padding-top:0"></div>
 <div id="list"></div>
 <div id="empty" style="display:none">Nothing matches.</div>
 <button id="fab">+</button>
@@ -204,6 +208,7 @@ const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|STANDING|⏰|✅|❌|🙋|^—$|^\
 
 let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='';
 let tab='OQ', domainFilter='All', statusFilter='All', expanded=null, editRow=null, addType='OQ';
+let sortBy=localStorage.getItem('oq_sort')||'priority';
 
 // ---------- utils ----------
 const $=id=>document.getElementById(id);
@@ -333,43 +338,47 @@ async function commit(op, message){
 function setDot(c){$('syncdot').className=c;}
 
 // ---------- UI ----------
+function matchQ(r){const q=$('search').value.trim().toLowerCase();return !q||(r.id+' '+r.text+' '+(r.pages||'')+' '+(r.resolution||'')+' '+r.domain).toLowerCase().includes(q);}
+function matchDomain(r,d){return d==='All'||r.domain===d;}
+function matchStatus(r,s){return s==='All'||(s==='needsme'?needsMe(r.status):statusClass(r.status||'')===s);}
+function rank(r){
+  const sc=statusClass(r.status||'');
+  if(sc==='overdue'||(dueDate(r.due)&&dueDate(r.due)<today()&&sc==='open'))return 0;
+  if(needsMe(r.status))return 1;
+  if(sc==='open')return 2;
+  if(sc==='standing')return 3;
+  return 4; // resolved awaiting archive
+}
+function sortRows(rows){
+  const idCmp=(a,b)=>b.id.localeCompare(a.id,undefined,{numeric:true});
+  const dDate=r=>dueDate(r.due||'')||dueDate(r.resolved||'')||'9999-99';
+  const rDate=r=>dueDate(r.raised||'')||'0000';
+  const cmps={
+    priority:(a,b)=>rank(a)-rank(b)||(dDate(a)<dDate(b)?-1:dDate(a)>dDate(b)?1:0)||idCmp(a,b),
+    due:(a,b)=>(dDate(a)<dDate(b)?-1:dDate(a)>dDate(b)?1:0)||idCmp(a,b),
+    newest:(a,b)=>(rDate(b)<rDate(a)?-1:rDate(b)>rDate(a)?1:0)||idCmp(a,b),
+    id:idCmp
+  };
+  return [...rows].sort(cmps[sortBy]||idCmp);
+}
 function activeRows(){
-  let rows=model[tab]||[];
-  if(domainFilter!=='All')rows=rows.filter(r=>r.domain===domainFilter);
-  if(statusFilter==='needsme')rows=rows.filter(r=>needsMe(r.status));
-  else if(statusFilter!=='All')rows=rows.filter(r=>statusClass(r.status||'')===statusFilter);
-  const q=$('search').value.trim().toLowerCase();
-  if(q)rows=rows.filter(r=>(r.id+' '+r.text+' '+(r.pages||'')+' '+(r.resolution||'')+' '+r.domain).toLowerCase().includes(q));
-  if(tab==='OQ'){
-    const t=today();
-    const rank=r=>{
-      const sc=statusClass(r.status);
-      if(sc==='overdue'||(dueDate(r.due)&&dueDate(r.due)<t&&sc==='open'))return 0;
-      if(needsMe(r.status))return 1;
-      if(sc==='open')return 2;
-      if(sc==='standing')return 3;
-      return 4; // resolved awaiting archive
-    };
-    rows=[...rows].sort((a,b)=>{
-      const ra=rank(a), rb=rank(b);
-      if(ra!==rb)return ra-rb;
-      const da=dueDate(a.due)||'9999', db=dueDate(b.due)||'9999';
-      if(da!==db)return da<db?-1:1;
-      return b.id.localeCompare(a.id,undefined,{numeric:true});
-    });
-  }else{
-    rows=[...rows].sort((a,b)=>b.id.localeCompare(a.id,undefined,{numeric:true}));
-  }
-  return rows;
+  return sortRows((model[tab]||[]).filter(r=>matchQ(r)&&matchDomain(r,domainFilter)&&matchStatus(r,statusFilter)));
 }
 function draw(){
   // counts + chips
   $('counts').textContent=`${model.OQ.length} OQ · ${model.CN.length} CN`;
+  const tabNames={OQ:'Open Qs',CN:'Contradictions',AR:'Archive'};
+  document.querySelectorAll('.tab').forEach(el=>{const k=el.dataset.tab;el.innerHTML=`${tabNames[k]}<span class="cnt">${model[k].length}</span>`;});
+  const base=(model[tab]||[]).filter(matchQ);   // facet counts respect the OTHER active filters
   const domains=['All',...new Set(Object.values(model).flat().map(r=>r.domain).filter(d=>d&&d!=='—'&&d.length<25))];
-  $('domainchips').innerHTML=domains.map(d=>`<div class="chip ${d===domainFilter?'active':''}" data-d="${escHtml(d)}">${escHtml(d)}</div>`).join('');
+  const dcount=d=>base.filter(r=>matchDomain(r,d)&&matchStatus(r,statusFilter)).length;
+  $('domainchips').innerHTML=domains.map(d=>`<div class="chip ${d===domainFilter?'active':''}" data-d="${escHtml(d)}">${escHtml(d)}<span class="cnt">${dcount(d)}</span></div>`).join('');
   const sts=['All','needsme','open','overdue','standing','resolved'];
   const stLabel={All:'Any status',needsme:'🙋 needs me',open:'🟢 open',overdue:'⏰ overdue',standing:'🧭 standing',resolved:'✅ resolved'};
-  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${stLabel[s]}</div>`).join('');
+  const scount=s=>base.filter(r=>matchDomain(r,domainFilter)&&matchStatus(r,s)).length;
+  $('statuschips').innerHTML=(tab==='AR')?'':sts.map(s=>`<div class="chip ${s===statusFilter?'active':''}" data-s="${s}">${stLabel[s]}<span class="cnt">${scount(s)}</span></div>`).join('');
+  const sorts=[['priority','⚡ priority'],['due','📅 due date'],['newest','🕐 newest'],['id','# id']];
+  $('sortchips').innerHTML='<div class="sortlabel">sort</div>'+sorts.map(([k,l])=>`<div class="chip ${k===sortBy?'active':''}" data-sort="${k}">${l}</div>`).join('');
   // list
   const rows=activeRows(), t=today();
   $('empty').style.display=rows.length?'none':'block';
@@ -487,6 +496,7 @@ document.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{tab=el.dataset.tab
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===el));draw();});
 $('domainchips').onclick=e=>{const c=e.target.closest('.chip');if(c){domainFilter=c.dataset.d;draw();}};
 $('statuschips').onclick=e=>{const c=e.target.closest('.chip');if(c){statusFilter=c.dataset.s;draw();}};
+$('sortchips').onclick=e=>{const c=e.target.closest('.chip');if(c){sortBy=c.dataset.sort;localStorage.setItem('oq_sort',sortBy);draw();}};
 $('list').onclick=e=>{
   const b=e.target.closest('[data-act="edit"]');
   if(b){e.stopPropagation();openEdit(b.dataset.id);return;}
