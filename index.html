@@ -415,6 +415,10 @@ function App() {
 
   const dk = dark;
   const cBg = dk ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200';
+  const syncLabel = syncStatus==='syncing' ? 'Syncing…'
+    : syncStatus==='error' ? 'Sync failed'
+    : lastSync ? `Synced ${lastSync.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`
+    : (Store.cfg() ? 'Not synced yet' : 'Local only');
 
   return html`
     <div class="min-h-screen transition-colors">
@@ -432,6 +436,8 @@ function App() {
               ${stats.overdue>0 && html`<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300 flex items-center gap-1"><${Icons.alert} />${stats.overdue} overdue</span>`}
             </div>
             <div class="flex-1" />
+            <!-- Sync status -->
+            <button onClick=${syncNow} class="text-[11px] ${syncStatus==='error'?'text-rose-500':(dk?'text-slate-400 hover:text-slate-200':'text-stone-500 hover:text-stone-700')}" title="Tap to sync now">${syncLabel}</button>
             <!-- Undo -->
             <button onClick=${undo} disabled=${histLen===0} class="p-1.5 rounded-md ${dk?'hover:bg-slate-800':'hover:bg-stone-100'} disabled:opacity-30 disabled:cursor-not-allowed" title=${histLen?`Undo (${histLen}) · Ctrl/⌘+Z`:'Nothing to undo'}><${Icons.undo} /></button>
             <!-- Sync -->
