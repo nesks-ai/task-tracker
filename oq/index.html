@@ -381,23 +381,69 @@ function bumpUpdated(note){
   if(i>=0)lines[i]=`updated: ${today()} (live register: ${note})`;
 }
 function token(){return localStorage.getItem(TOKEN_KEY)||'';}
+const GH=`https://api.github.com/repos/${OWNER}/${REPO}`;
+function ghHeaders(){return {Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'};}
+// The register crossed 1 MiB on 2026-08-24. Above that the contents API silently returns an
+// EMPTY content field (encoding:"none") — which rendered the whole app blank. So reads fall
+// back to the blob API (good to 100 MB) and large writes go through the Git Data API.
+const PUT_LIMIT=900000;
 async function ghFetch(){
-  const r=await fetch(API+'?ref='+BRANCH,{headers:{Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'},cache:'no-store'});
+  const r=await fetch(API+'?ref='+BRANCH,{headers:ghHeaders(),cache:'no-store'});
   if(r.status===401||r.status===403)throw new Error('AUTH');
   if(r.status===404)throw new Error('Not found — token may lack access to '+REPO);
   if(!r.ok)throw new Error('GitHub '+r.status);
   const j=await r.json();
   sha=j.sha;
-  parse(b64decode(j.content));
+  let content='';
+  if(j.content&&j.encoding==='base64'){content=b64decode(j.content);}
+  else{
+    const b=await fetch(`${GH}/git/blobs/${j.sha}`,{headers:ghHeaders(),cache:'no-store'});
+    if(b.status===401||b.status===403)throw new Error('AUTH');
+    if(!b.ok)throw new Error('Blob read '+b.status);
+    const bj=await b.json();
+    if(!bj.content)throw new Error('Blob returned no content');
+    content=b64decode(bj.content);
+  }
+  // never render an empty register silently again — fail loud instead
+  if(!content.trim())throw new Error('Register came back empty — not rendering');
+  parse(content);
   lastSync=Date.now();
 }
 async function ghPut(message){
-  const body={message:'live-OQ: '+message, content:b64encode(lines.join(EOL)), sha, branch:BRANCH};
-  const r=await fetch(API,{method:'PUT',headers:{Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'},body:JSON.stringify(body)});
+  const payload=lines.join(EOL);
+  if(payload.length>PUT_LIMIT)return ghPutGitData(message,payload);
+  const body={message:'live-OQ: '+message, content:b64encode(payload), sha, branch:BRANCH};
+  const r=await fetch(API,{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
   if(r.status===409||r.status===422)throw new Error('CONFLICT');
   if(!r.ok)throw new Error('GitHub write '+r.status);
   const j=await r.json();
   sha=j.content.sha;
+}
+// blob -> tree -> commit -> fast-forward ref. Additive by construction: base_tree keeps every
+// other file, and force:false makes a moved branch fail as CONFLICT rather than clobber it.
+async function ghPutGitData(message,payload){
+  const H=ghHeaders(), J=Object.assign({'Content-Type':'application/json'},H);
+  const step=async(url,opt,label)=>{
+    const r=await fetch(url,opt);
+    if(r.status===401||r.status===403)throw new Error('AUTH');
+    if(!r.ok)throw new Error(label+' '+r.status);
+    return r.json();
+  };
+  const ref=await step(`${GH}/git/ref/heads/${BRANCH}`,{headers:H,cache:'no-store'},'ref read');
+  const head=ref.object.sha;
+  const headCommit=await step(`${GH}/git/commits/${head}`,{headers:H,cache:'no-store'},'commit read');
+  const blob=await step(`${GH}/git/blobs`,{method:'POST',headers:J,
+    body:JSON.stringify({content:b64encode(payload),encoding:'base64'})},'blob write');
+  const tree=await step(`${GH}/git/trees`,{method:'POST',headers:J,
+    body:JSON.stringify({base_tree:headCommit.tree.sha,
+      tree:[{path:PATH,mode:'100644',type:'blob',sha:blob.sha}]})},'tree write');
+  const cm=await step(`${GH}/git/commits`,{method:'POST',headers:J,
+    body:JSON.stringify({message:'live-OQ: '+message,tree:tree.sha,parents:[head]})},'commit write');
+  const upd=await fetch(`${GH}/git/refs/heads/${BRANCH}`,{method:'PATCH',headers:J,
+    body:JSON.stringify({sha:cm.sha,force:false})});
+  if(upd.status===422)throw new Error('CONFLICT');
+  if(!upd.ok)throw new Error('ref update '+upd.status);
+  sha=blob.sha;
 }
 async function commit(op,message){
   try{
