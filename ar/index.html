@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F7F6F3">
+<title>Awaiting My Reply</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%86%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Palette lifted verbatim from the OQ register so the two apps read as one system. */
+:root{
+  --b:#F7F6F3; --s:#FFFFFF; --s2:#F5F3EF; --s3:#FCFBF9; --d:#E4E1DA; --d2:#D3CFC6;
+  --t:#1B1E23; --m:#6A7280; --dm:#9AA1AB; --hb:rgba(247,246,243,0.86);
+  --g:#1F8A54; --onG:#FFFFFF; --gb:#EDF7F1; --gd:#C6E5D2;
+  --a:#B4690E; --ab:#FDF6E8; --ad:#EAD6AC;
+  --u:#2563EB; --ub:#EDF3FE; --ud:#CFDFFB;
+  --r:#B4433B; --rb:#FCF0EF; --rd:#EBCFCC;
+}
+:root[data-theme="dark"]{
+  --b:#0C0E12; --s:#14181F; --s2:#1A1F27; --s3:#11151B; --d:#252C36; --d2:#333C48;
+  --t:#E7EDF4; --m:#94A0B0; --dm:#6B7683; --hb:rgba(12,14,18,0.86);
+  --g:#4FD189; --onG:#0C0E12; --gb:#12241B; --gd:#1F4030;
+  --a:#EFAE4B; --ab:#231B0F; --ad:#4A3A1C;
+  --u:#7FB0FF; --ub:#101B2C; --ud:#22344F;
+  --r:#E8827A; --rb:#2A1A1B; --rd:#40272A;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html{background:var(--b)}
+body{margin:0; background:var(--b); color:var(--t); font:400 14px/1.5 "IBM Plex Sans",sans-serif}
+button{font-family:inherit; cursor:pointer}
+input,textarea{font-family:inherit}
+.mono{font-family:"IBM Plex Mono",monospace}
+.wrap{max-width:860px; margin:0 auto; padding:0 24px 120px}
+@keyframes fade{from{opacity:0; transform:translateY(-4px)}to{opacity:1; transform:none}}
+
+header{position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
+  background:var(--hb); border-bottom:1px solid var(--d)}
+.hrow{max-width:860px; margin:0 auto; padding:16px 24px; display:flex; gap:14px; align-items:center}
+.htitle{font:700 21px "Space Grotesk",sans-serif; letter-spacing:-0.02em}
+.hsync{font:400 11px "IBM Plex Mono",monospace; text-transform:uppercase;
+  letter-spacing:0.06em; color:var(--dm); line-height:1.35}
+.hspace{flex:1}
+.ibtn{width:36px; height:36px; border-radius:10px; border:1px solid var(--d); background:var(--s);
+  color:var(--m); font-size:15px; flex-shrink:0}
+.ibtn:hover{border-color:var(--d2); color:var(--t)}
+.pill{font:500 11px "IBM Plex Mono",monospace; padding:3px 8px; border-radius:6px;
+  background:var(--s2); color:var(--m); border:1px solid var(--d)}
+.pill.hot{background:var(--rb); color:var(--r); border-color:var(--rd)}
+
+.note{margin:20px 0 0; padding:11px 14px; border-radius:10px; background:var(--ab);
+  border:1px solid var(--ad); color:var(--t); font-size:13px}
+.empty{margin:64px 0; text-align:center; color:var(--m)}
+.empty .big{font:600 17px "Space Grotesk",sans-serif; color:var(--t); margin-bottom:6px}
+
+.card{margin-top:16px; border:1px solid var(--d); border-radius:14px; background:var(--s);
+  animation:fade .18s ease; overflow:hidden}
+.card.queued{border-color:var(--ad); background:var(--ab)}
+.card.sent{border-color:var(--gd); background:var(--gb)}
+.card.failed{border-color:var(--rd)}
+.chead{padding:14px 16px 0; display:flex; gap:10px; align-items:flex-start}
+.heat{font-size:15px; line-height:1.4; flex-shrink:0}
+.cwho{font:600 15px "IBM Plex Sans",sans-serif; color:var(--t)}
+.csub{color:var(--m); font-size:13px; margin-top:1px; word-break:break-word}
+.cmeta{margin-left:auto; display:flex; gap:6px; align-items:center; flex-shrink:0}
+.badge{font:500 10px "IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:0.06em;
+  padding:3px 7px; border-radius:5px; border:1px solid var(--d); color:var(--m); background:var(--s2)}
+.badge.outlook{background:var(--ub); color:var(--u); border-color:var(--ud)}
+.badge.gmail{background:var(--rb); color:var(--r); border-color:var(--rd)}
+.cask{padding:10px 16px 0; color:var(--t); font-size:13.5px}
+.crecip{padding:10px 16px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+.rlabel{font:500 10px "IBM Plex Mono",monospace; text-transform:uppercase;
+  letter-spacing:0.06em; color:var(--dm)}
+.chip{font:400 12px "IBM Plex Mono",monospace; padding:3px 8px; border-radius:6px;
+  background:var(--s2); border:1px solid var(--d); color:var(--m)}
+.cbody{padding:12px 16px 0}
+textarea.draft{width:100%; min-height:150px; resize:vertical; padding:13px 14px;
+  border:1px solid var(--d); border-radius:10px; background:var(--s3); color:var(--t);
+  font:400 13.5px/1.62 "IBM Plex Sans",sans-serif}
+textarea.draft:focus{outline:none; border-color:var(--u); background:var(--s)}
+.cfoot{padding:12px 16px 14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.savenote{font:400 11px "IBM Plex Mono",monospace; color:var(--dm); margin-right:auto}
+.btn{border:1px solid var(--d); background:var(--s); color:var(--t); padding:8px 14px;
+  border-radius:9px; font:600 13px "IBM Plex Sans",sans-serif}
+.btn:hover{border-color:var(--d2)}
+.btn.primary{background:var(--g); border-color:var(--g); color:var(--onG)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:none; color:var(--m); border-color:transparent}
+.btn.ghost:hover{color:var(--t); border-color:var(--d)}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.statusline{padding:0 16px 14px; font-size:13px; color:var(--m)}
+.statusline b{color:var(--t)}
+
+.scrim{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:none}
+.scrim.on{display:block}
+.sheet{position:fixed; z-index:41; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(560px,calc(100vw - 32px)); max-height:86vh; overflow:auto; background:var(--s);
+  border:1px solid var(--d); border-radius:16px; padding:22px; display:none}
+.sheet.on{display:block}
+.sheet h2{margin:0 0 4px; font:700 18px "Space Grotesk",sans-serif}
+.sheet .sub{color:var(--m); font-size:13px; margin-bottom:16px}
+.preview{background:var(--s3); border:1px solid var(--d); border-radius:10px; padding:12px 14px;
+  font:400 13px/1.6 "IBM Plex Sans",sans-serif; white-space:pre-wrap; max-height:220px;
+  overflow:auto; color:var(--t)}
+.warn{margin-top:14px; padding:11px 13px; border-radius:9px; background:var(--ab);
+  border:1px solid var(--ad); font-size:12.5px}
+.sheet input[type=text]{width:100%; padding:10px 12px; border:1px solid var(--d);
+  border-radius:9px; background:var(--s3); color:var(--t); font:400 13px "IBM Plex Mono",monospace}
+.srow{display:flex; gap:8px; margin-top:18px; justify-content:flex-end}
+#toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:60;
+  background:var(--t); color:var(--b); padding:11px 18px; border-radius:10px;
+  font:500 13px "IBM Plex Sans",sans-serif; opacity:0; pointer-events:none; transition:opacity .18s}
+#toast.on{opacity:1}
+@media(max-width:640px){
+  .wrap{padding:0 14px 120px} .hrow{padding:14px}
+  .cmeta{margin-left:0; width:100%; order:9}
+  .chead{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div>
+      <div class="htitle">Awaiting My Reply</div>
+      <div class="hsync" id="syncline">loading…</div>
+    </div>
+    <div class="hspace"></div>
+    <span class="pill" id="cnt">—</span>
+    <button class="ibtn" id="syncbtn" title="Refresh">⟳</button>
+    <button class="ibtn" id="themebtn" title="Theme">◐</button>
+    <button class="ibtn" id="connbtn" title="GitHub token">⚙</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="banner"></div>
+  <div id="list"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="sheet" id="sendsheet">
+  <h2>Send this reply?</h2>
+  <div class="sub" id="sendsub"></div>
+  <div class="rlabel" style="margin-bottom:6px">Goes to</div>
+  <div class="crecip" id="sendrecip" style="padding:0 0 14px"></div>
+  <div class="rlabel" style="margin-bottom:6px">Exactly this text</div>
+  <div class="preview" id="sendpreview"></div>
+  <div class="warn">This actually sends. The dispatcher posts these words
+    <b>byte-for-byte</b> — it never rewrites them, and it never adds a recipient
+    who is not already on the thread. It runs every 10 minutes between 07:00 and
+    23:00 London, so expect it to go within that window.</div>
+  <div class="srow">
+    <button class="btn ghost" data-close>Cancel</button>
+    <button class="btn primary" id="sendconfirm">Queue it</button>
+  </div>
+</div>
+
+<div class="sheet" id="toksheet">
+  <h2>GitHub token</h2>
+  <div class="sub">Fine-grained PAT — owner <span class="mono">nesks-ai</span>,
+    repo <span class="mono">llm-wiki</span> only, Contents read &amp; write.
+    Shared with the OQ register: paste it in either app and both work.</div>
+  <input type="text" id="tokinput" placeholder="github_pat_…" autocomplete="off" spellcheck="false">
+  <div class="srow">
+    <button class="btn ghost" id="forgettok">Forget</button>
+    <button class="btn ghost" data-close>Cancel</button>
+    <button class="btn primary" id="savetok">Save</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ============================================================================
+   Awaiting My Reply — the one place Nibras sees every drafted reply, edits it,
+   and sends it.
+
+   Data:  ar/ar-drafts.json in the PRIVATE repo nesks-ai/llm-wiki.
+          Deliberately outside wiki/ and templates/, because sync-wiki-to-github
+          mirrors those two trees vault->clone with `robocopy /MIR` — a file
+          under wiki/ that this app edited would be silently overwritten by the
+          vault's copy on the next sync (that is what discarded two live-register
+          edits on 2026-08-09). At ar/ nothing manages it but this app and the
+          dispatcher.
+
+   Sending: this app NEVER sends mail. It sets status=SEND on a row. The local
+          `ar-send-dispatch` routine picks that up within ~10 minutes and sends
+          through the proper channel — the Gmail connector in-thread, or Outlook
+          Web via Claude-for-Chrome from nibras@sslwireless.com. Browsers cannot
+          send from either identity, and pretending otherwise would be the bug.
+   ==========================================================================*/
+const OWNER='nesks-ai', REPO='llm-wiki', BRANCH='main';
+const PATH='ar/ar-drafts.json';
+const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
+const GH=`https://api.github.com/repos/${OWNER}/${REPO}`;
+// Same key as the OQ app on purpose. Both live on nesks-ai.github.io, so
+// localStorage is shared across paths: paste the token once, both apps work.
+const TOKEN_KEY='oq_gh_token';
+const THEME_KEY='ar_theme';
+
+const HOT_HOURS=48, OVERDUE_HOURS=120;
+const OPEN=new Set(['OPEN','SNOOZED','SEND','SENDING','FAILED']);
+
+let store=null, sha=null, lastSync=null, pending={};   // id -> unsaved body
+const S={sendId:null, settingsOpen:false, saving:{}};
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg,ms=2200){
+  const t=$('toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),ms);
+}
+function b64d(s){return decodeURIComponent(escape(atob(s.replace(/\s/g,''))));}
+function b64e(s){return btoa(unescape(encodeURIComponent(s)));}
+function token(){return localStorage.getItem(TOKEN_KEY)||'';}
+function heads(){return {Authorization:'Bearer '+token(),Accept:'application/vnd.github+json'};}
+
+const hoursSince=iso=>{
+  const t=Date.parse(iso); return isFinite(t)?(Date.now()-t)/36e5:0;
+};
+function heat(r){
+  const h=hoursSince(r.opened);
+  return h>=OVERDUE_HOURS?'⏰':h>=HOT_HOURS?'🔴':h>=12?'🟠':'🟡';
+}
+function ageLabel(r){
+  const h=hoursSince(r.opened);
+  return h<24?`${Math.max(1,Math.round(h))}h`:`${(h/24).toFixed(h<48?1:0)}d`;
+}
+
+/* ------------------------------------------------------------------ GitHub */
+async function fetchStore(){
+  const r=await fetch(API+'?ref='+BRANCH,{headers:heads(),cache:'no-store'});
+  if(r.status===401||r.status===403)throw new Error('AUTH');
+  if(r.status===404){ store={version:1,rows:[],next_id:1,last_reconciled:null}; sha=null;
+    lastSync=Date.now(); return; }
+  if(!r.ok)throw new Error('GitHub '+r.status);
+  const j=await r.json(); sha=j.sha;
+  let content='';
+  if(j.content&&j.encoding==='base64'){content=b64d(j.content);}
+  else{
+    // The OQ register went blank at 1 MiB because the contents API returns
+    // content:"" + encoding:"none" above the limit. Never decode that silently.
+    const b=await fetch(`${GH}/git/blobs/${j.sha}`,{headers:heads(),cache:'no-store'});
+    if(!b.ok)throw new Error('Blob read '+b.status);
+    const bj=await b.json();
+    if(!bj.content)throw new Error('Blob returned no content');
+    content=b64d(bj.content);
+  }
+  if(!content.trim())throw new Error('AR store came back empty — not rendering');
+  store=JSON.parse(content);
+  lastSync=Date.now();
+}
+
+async function putStore(message){
+  store.updated=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+  const body={message:'live-AR: '+message, content:b64e(JSON.stringify(store,null,2)),
+    branch:BRANCH};
+  if(sha)body.sha=sha;
+  const r=await fetch(API,{method:'PUT',headers:heads(),body:JSON.stringify(body)});
+  if(r.status===409||r.status===422)throw new Error('CONFLICT');
+  if(r.status===401||r.status===403)throw new Error('AUTH');
+  if(!r.ok)throw new Error('GitHub write '+r.status);
+  sha=(await r.json()).content.sha;
+}
+
+/**
+ * Apply a mutation and persist it, surviving a concurrent write.
+ *
+ * `op` takes the CURRENT store and must be re-runnable: on a conflict we
+ * re-read from GitHub and apply it again to fresh state, never to the stale
+ * copy we started from. Three writers share this file — this window, the
+ * dispatcher, and outlook-inbox-triage.
+ */
+async function commit(op,message){
+  try{
+    op(store);
+    try{ await putStore(message); }
+    catch(e){
+      if(e.message!=='CONFLICT')throw e;
+      toast('Changed elsewhere — merging…');
+      await fetchStore(); op(store); await putStore(message);
+    }
+    draw();
+  }catch(e){
+    if(e.message==='AUTH'){toast('Token rejected — check the ⚙ settings',3600); openTok();}
+    else toast('Save failed: '+e.message,4000);
+    try{ await fetchStore(); draw(); }catch(_){}
+  }
+}
+
+/* ------------------------------------------------------------------ model */
+function openRows(){
+  if(!store)return[];
+  const now=Date.now();
+  const rows=store.rows.filter(r=>{
+    if(!OPEN.has(r.status))return false;
+    if(r.status==='SNOOZED'&&r.snooze_until&&Date.parse(r.snooze_until)>now)return false;
+    return true;
+  });
+  const ord={'⏰':0,'🔴':1,'🟠':2,'🟡':3}, stk={high:0,med:1,low:2};
+  rows.sort((a,b)=>ord[heat(a)]-ord[heat(b)] ||
+    (stk[a.stakes]??1)-(stk[b.stakes]??1) || a.opened.localeCompare(b.opened));
+  return rows;
+}
+// A row the dispatcher finished stays visible for one session so he sees the
+// outcome of his own click, rather than the card vanishing into thin air.
+function justDone(){
+  if(!store)return[];
+  const cut=Date.now()-36e5*6;
+  return store.rows.filter(r=>(r.status==='SENT'||r.status==='CLOSED')
+    && r.closed_at && Date.parse(r.closed_at)>cut)
+    .sort((a,b)=>(b.closed_at||'').localeCompare(a.closed_at||''));
+}
+
+/* ------------------------------------------------------------------ render */
+function chips(label,arr){
+  if(!arr||!arr.length)return'';
+  return `<span class="rlabel">${label}</span>`+
+    arr.map(e=>`<span class="chip">${esc(e)}</span>`).join('');
+}
+
+function cardHTML(r){
+  const cls=r.status==='SEND'||r.status==='SENDING'?' queued':
+            r.status==='SENT'||r.status==='CLOSED'?' sent':
+            r.status==='FAILED'?' failed':'';
+  const body=pending[r.id]!==undefined?pending[r.id]:(r.body||'');
+  let inner='';
+
+  if(r.status==='SENT'||r.status==='CLOSED'){
+    const how={dispatcher:'Sent for you',self:'You replied directly',
+      dismissed:'Dismissed'}[r.closed_by]||'Closed';
+    inner=`<div class="statusline"><b>${how}</b>${
+      r.closed_at?' · '+esc(r.closed_at.replace('T',' ').replace('Z',' UTC')):''}${
+      r.evidence?'<br><span class="mono" style="font-size:11.5px">'+esc(r.evidence)+'</span>':''}</div>`;
+  }else if(r.status==='SEND'||r.status==='SENDING'){
+    inner=`<div class="statusline"><b>Queued.</b> The dispatcher will send it within
+      ~10 minutes and email you a receipt. If you reply from your phone before
+      then, it cancels itself rather than sending twice.</div>
+      <div class="cfoot"><span class="savenote">${esc(r.status)}</span>
+      <button class="btn" data-act="unqueue" data-id="${r.id}">Cancel send</button></div>`;
+  }else{
+    const failed=r.status==='FAILED'
+      ? `<div class="statusline" style="color:var(--r)"><b>Last attempt failed</b> ·
+         ${esc(r.last_error||'unknown')} · ${r.attempts} attempt(s)</div>` : '';
+    inner=`${failed}
+      <div class="cbody"><textarea class="draft" data-id="${r.id}"
+        placeholder="Write the reply…">${esc(body)}</textarea></div>
+      <div class="cfoot">
+        <span class="savenote" id="sn-${r.id}">${
+          pending[r.id]!==undefined?'unsaved':(r.body_edited_at?'edited '+esc(r.body_edited_at.slice(0,10)):'as drafted')}</span>
+        <button class="btn ghost" data-act="dismiss" data-id="${r.id}">Dismiss</button>
+        <button class="btn ghost" data-act="snooze" data-id="${r.id}">Snooze 1d</button>
+        ${r.web_link?`<a class="btn ghost" href="${esc(r.web_link)}" target="_blank" rel="noopener">Open in mail</a>`:''}
+        <button class="btn primary" data-act="send" data-id="${r.id}"${body.trim()?'':' disabled'}>Send</button>
+      </div>`;
+  }
+
+  return `<div class="card${cls}" id="card-${r.id}">
+    <div class="chead">
+      <span class="heat">${heat(r)}</span>
+      <div>
+        <div class="cwho">${esc(r.from_name||r.from_email||'Unknown')}</div>
+        <div class="csub">${esc(r.subject||'(no subject)')}</div>
+      </div>
+      <div class="cmeta">
+        <span class="badge ${esc(r.channel)}">${esc(r.channel)}</span>
+        <span class="badge">${ageLabel(r)}</span>
+        <span class="badge mono">${esc(r.id)}</span>
+      </div>
+    </div>
+    ${r.ask?`<div class="cask">${esc(r.ask)}</div>`:''}
+    <div class="crecip">${chips('to',r.to)}${chips('cc',r.cc)}</div>
+    ${inner}
+  </div>`;
+}
+
+function draw(){
+  const rows=openRows(), done=justDone();
+  const hot=rows.filter(r=>heat(r)==='⏰'||heat(r)==='🔴').length;
+  $('cnt').className='pill'+(hot?' hot':'');
+  $('cnt').textContent=`${rows.length} open${hot?` · ${hot} hot`:''}`;
+
+  const lr=store&&store.last_reconciled;
+  const stale=lr?((Date.now()-Date.parse(lr))/6e4):null;
+  $('syncline').innerHTML=
+    (lastSync?`loaded ${new Date(lastSync).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`:'—')+
+    ' · '+(lr?`checked against sent ${stale<90?Math.round(stale)+'m ago':'>'+Math.round(stale/60)+'h ago'}`
+             :'never reconciled');
+
+  let banner='';
+  if(!token())banner=`<div class="note"><b>No GitHub token.</b> Tap ⚙ and paste the
+    fine-grained PAT for <span class="mono">llm-wiki</span>. It is the same token
+    the OQ register uses.</div>`;
+  else if(lr&&stale>90)banner=`<div class="note"><b>Reconciliation is ${Math.round(stale/60)}h stale.</b>
+    The <span class="mono">ar-send-dispatch</span> routine may not be running, so
+    rows you have already answered elsewhere might still be listed — and a queued
+    Send will not go out until it runs.</div>`;
+  $('banner').innerHTML=banner;
+
+  if(!rows.length&&!done.length){
+    $('list').innerHTML=`<div class="empty"><div class="big">Nothing is waiting on you.</div>
+      Inbox triage found no reply you owe. This is the healthy state.</div>`;
+    return;
+  }
+  $('list').innerHTML=rows.map(cardHTML).join('')+
+    (done.length?`<div class="note" style="margin-top:26px">Closed recently</div>`+
+      done.map(cardHTML).join(''):'');
+}
+
+/* ------------------------------------------------------------------ actions */
+let saveTimer=null;
+function queueBodySave(id,val){
+  pending[id]=val;
+  const n=$('sn-'+id); if(n)n.textContent='unsaved…';
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveBody(id),1200);
+}
+async function saveBody(id){
+  if(pending[id]===undefined)return;
+  const val=pending[id];
+  await commit(st=>{
+    const r=st.rows.find(x=>x.id===id);
+    if(r){ r.body=val; r.body_edited_at=new Date().toISOString().replace(/\.\d+Z$/,'Z'); }
+  },`edit body ${id}`);
+  delete pending[id];
+  const n=$('sn-'+id); if(n)n.textContent='saved';
+}
+
+function openSend(id){
+  const r=store.rows.find(x=>x.id===id); if(!r)return;
+  const body=pending[id]!==undefined?pending[id]:(r.body||'');
+  if(!body.trim()){toast('Nothing to send — the draft is empty');return;}
+  S.sendId=id;
+  $('sendsub').textContent=`${r.channel==='outlook'?'From nibras@sslwireless.com via Outlook Web'
+    :'From nibras.islam@gmail.com, in thread'} — re: ${r.subject||''}`;
+  $('sendrecip').innerHTML=chips('to',r.to)+chips('cc',r.cc);
+  $('sendpreview').textContent=body;
+  $('scrim').classList.add('on'); $('sendsheet').classList.add('on');
+}
+function closeSheets(){
+  $('scrim').classList.remove('on');
+  $('sendsheet').classList.remove('on'); $('toksheet').classList.remove('on');
+  S.sendId=null;
+}
+function openTok(){
+  $('tokinput').value=token();
+  $('scrim').classList.add('on'); $('toksheet').classList.add('on');
+}
+
+async function doQueue(){
+  const id=S.sendId; if(!id)return;
+  const body=pending[id]!==undefined?pending[id]:null;
+  closeSheets();
+  await commit(st=>{
+    const r=st.rows.find(x=>x.id===id); if(!r)return;
+    if(body!==null){ r.body=body; r.body_edited_at=new Date().toISOString().replace(/\.\d+Z$/,'Z'); }
+    r.status='SEND'; r.send_requested_at=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+    r.attempts=0; r.last_error=null;
+  },`queue send ${id}`);
+  delete pending[id];
+  toast('Queued — going out within ~10 minutes');
+}
+
+async function act(a,id){
+  if(a==='send'){openSend(id);return;}
+  if(a==='unqueue'){
+    await commit(st=>{const r=st.rows.find(x=>x.id===id);
+      if(r){r.status='OPEN'; r.send_requested_at=null;}},`cancel send ${id}`);
+    toast('Send cancelled'); return;
+  }
+  if(a==='snooze'){
+    const until=new Date(Date.now()+864e5).toISOString().replace(/\.\d+Z$/,'Z');
+    await commit(st=>{const r=st.rows.find(x=>x.id===id);
+      if(r){r.status='SNOOZED'; r.snooze_until=until;}},`snooze ${id}`);
+    toast('Back tomorrow'); return;
+  }
+  if(a==='dismiss'){
+    if(!confirm('Close this without replying? It will not come back.'))return;
+    await commit(st=>{const r=st.rows.find(x=>x.id===id);
+      if(r){r.status='CLOSED'; r.closed_by='dismissed';
+        r.closed_at=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+        r.evidence='dismissed in the AR window';}},`dismiss ${id}`);
+    toast('Dismissed'); return;
+  }
+}
+
+/* ------------------------------------------------------------------ wiring */
+document.addEventListener('input',e=>{
+  const ta=e.target.closest('textarea.draft');
+  if(ta)queueBodySave(ta.dataset.id,ta.value);
+});
+document.addEventListener('blur',e=>{
+  const ta=e.target.closest&&e.target.closest('textarea.draft');
+  if(ta){clearTimeout(saveTimer);saveBody(ta.dataset.id);}
+},true);
+
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-act],[data-close],#syncbtn,#themebtn,#connbtn,#scrim,#savetok,#forgettok,#sendconfirm');
+  if(!t)return;
+  if(t.dataset.act){await act(t.dataset.act,t.dataset.id);return;}
+  if(t.hasAttribute('data-close')||t.id==='scrim'){closeSheets();return;}
+  if(t.id==='sendconfirm'){await doQueue();return;}
+  if(t.id==='connbtn'){openTok();return;}
+  if(t.id==='savetok'){
+    localStorage.setItem(TOKEN_KEY,$('tokinput').value.trim());
+    closeSheets(); await load(); return;
+  }
+  if(t.id==='forgettok'){localStorage.removeItem(TOKEN_KEY);closeSheets();draw();return;}
+  if(t.id==='themebtn'){
+    const cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',cur);
+    localStorage.setItem(THEME_KEY,cur); return;
+  }
+  if(t.id==='syncbtn'){await load(); toast('Refreshed'); return;}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheets();});
+
+async function load(){
+  if(!token()){draw();return;}
+  try{ await fetchStore(); draw(); }
+  catch(e){
+    if(e.message==='AUTH'){toast('Token rejected',3600);openTok();}
+    else toast('Load failed: '+e.message,4200);
+    draw();
+  }
+}
+
+(function init(){
+  const th=localStorage.getItem(THEME_KEY);
+  if(th)document.documentElement.setAttribute('data-theme',th);
+  else if(matchMedia('(prefers-color-scheme:dark)').matches)
+    document.documentElement.setAttribute('data-theme','dark');
+  store={version:1,rows:[],next_id:1,last_reconciled:null};
+  draw(); load();
+  // A backgrounded tab goes stale; re-read when he comes back to it. Cheap, and
+  // it means the list he is looking at reflects sends the dispatcher completed.
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && lastSync && Date.now()-lastSync>60000) load();
+  });
+  // Test hook, mirroring the OQ app's __loadMarkdown.
+  window.__loadStore=j=>{store=j;draw();};
+})();
+</script>
+</body>
+</html>
