@@ -128,6 +128,10 @@ header{position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
 .typechip{font:500 11px "IBM Plex Mono",monospace; border-radius:5px; padding:3px 0; text-align:center; border:1px solid}
 .typechip.cn{color:var(--p); border-color:var(--pd)}
 .typechip.oq{color:var(--u); border-color:var(--ud)}
+.typechip.ob{color:#c2410c; border-color:#c2410c}
+:root[data-theme="dark"] .typechip.ob{color:#fb923c; border-color:#9a3412}
+.obamt{font:600 12px "IBM Plex Mono",monospace; color:#c2410c; white-space:nowrap; margin-right:8px}
+:root[data-theme="dark"] .obamt{color:#fb923c}
 .rq{font-size:15px; line-height:1.45; text-wrap:pretty; color:var(--t)}
 .rq.resolved{color:var(--m)}
 .badge{font:600 11px "IBM Plex Sans",sans-serif; letter-spacing:0.03em; border-radius:6px;
@@ -278,13 +282,20 @@ const OWNER='nesks-ai', REPO='llm-wiki', BRANCH='main';
 const PATH='wiki/synthesis/Open-Questions-and-Contradictions.md';
 const API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(PATH).replace(/%2F/g,'/')}`;
 const TOKEN_KEY='oq_gh_token';
+// Second document: the obligations register — hard dates someone OUTSIDE the house set for us.
+// Deliberately kept as parallel state rather than folded into the OQ globals, so nothing here
+// can break the register this app was built for.
+const OB_PATH='wiki/synthesis/Obligations-and-Deadlines.md';
+const OB_API=`https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(OB_PATH).replace(/%2F/g,'/')}`;
+let obLines=[], obEOL='\n', obSha=null, obLoaded=false;
 const SECTIONS={
   CN:{heading:'## Contradictions (CN-xxx)', left:['id','raised','domain'], right:['pages','status','resolution']},
   OQ:{heading:'## Open questions & decision gates (OQ-xxx)', left:['id','raised','due','domain'], right:['pages','status','resolution']},
-  AR:{heading:'## Resolved (archive)', left:['id','raised','resolved','domain'], right:['pages','resolution']}
+  AR:{heading:'## Resolved (archive)', left:['id','raised','resolved','domain'], right:['pages','resolution']},
+  OB:{heading:'## Live obligations', left:['id','domain'], right:['counterparty','amount','hard','actor','lead','status','evidence']}
 };
 const STATUS_RE=/OPEN|OVERDUE|RESOLVED|CLOSED|STANDING|REOPENED|⏰|✅|❌|🙋|^—$|^\s*$/i;
-let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[]}, fmUpdated='', lastSync=null;
+let lines=[], EOL='\n', sha=null, model={CN:[],OQ:[],AR:[],OB:[]}, fmUpdated='', lastSync=null;
 
 const $=id=>document.getElementById(id);
 const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -333,7 +344,7 @@ function parsePages(cell){
 function parse(content){
   EOL=content.includes('\r\n')?'\r\n':'\n';
   lines=content.split(EOL);
-  model={CN:[],OQ:[],AR:[]};
+  model={CN:[],OQ:[],AR:[],OB:model.OB||[]}; // OB lives in its own document — never clear it here
   const upd=lines.findIndex(l=>l.startsWith('updated:'));
   fmUpdated=upd>=0?lines[upd].slice(8).trim():'';
   for(const key of Object.keys(SECTIONS)){
@@ -376,6 +387,93 @@ function parse(content){
     }
   }
 }
+/* ================= obligations (OB) ================= */
+// Lead time is the point of this register: the alarm runs off the trigger date
+// (hard date minus the working days the action actually needs), not the hard date.
+function addWorkingDays(iso,n){
+  const d=new Date(iso+'T00:00:00Z');let left=Math.abs(n),step=n<0?-1:1;
+  while(left>0){d.setUTCDate(d.getUTCDate()+step);const dow=d.getUTCDay();if(dow!==0&&dow!==6)left--;}
+  return d.toISOString().slice(0,10);
+}
+function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000);}
+// Calendar days flatter you; working days are what a bank or a registry actually counts.
+function workingDaysBetween(a,b){
+  if(!a||!b||b<a)return 0;
+  const d=new Date(a+'T00:00:00Z'),end=new Date(b+'T00:00:00Z');let n=0;
+  while(d<=end){const w=d.getUTCDay();if(w!==0&&w!==6)n++;d.setUTCDate(d.getUTCDate()+1);}
+  return n;
+}
+function obStatusKey(s){
+  if(/DONE/i.test(s))return'done';
+  if(/LAPSED/i.test(s))return'lapsed';
+  if(/OVERDUE/i.test(s))return'overdue';
+  if(/DUE/i.test(s))return'due';
+  return'scheduled';
+}
+function parseOB(content){
+  obEOL=content.includes('\r\n')?'\r\n':'\n';
+  obLines=content.split(obEOL);
+  const rows=[],t=today();
+  for(let i=0;i<obLines.length;i++){
+    const l=obLines[i];
+    if(!/^\|\s*OB-\d+/.test(l))continue;
+    const cells=splitCells(l);
+    const trail=cells.length>1&&cells[cells.length-1].trim()===''?1:0;
+    const cc=cells.slice(1,cells.length-trail);
+    const L=SECTIONS.OB.left,R=SECTIONS.OB.right,full=L.length+R.length+1;
+    const row={line:i,doc:'OB',section:'OB',type:'OB',cells,ccStart:1,ccLen:cc.length,rlen:R.length};
+    if(cc.length>=full){
+      L.forEach((c,idx)=>row[c]=cc[idx].trim());
+      R.forEach((c,idx)=>row[c]=cc[cc.length-R.length+idx].trim());
+      row.text=cc.slice(L.length,cc.length-R.length).join('|').trim();
+      row.editable=true;
+    }else{
+      // the "no date yet — retrieve" table is a different, shorter shape: id | domain | what | why | where
+      L.forEach((c,idx)=>row[c]=(cc[idx]||'').trim());
+      row.text=(cc[2]||'').trim();
+      row.why=(cc[3]||'').trim();row.where=(cc[4]||'').trim();
+      row.counterparty='';row.amount='';row.hard='';row.actor='';row.lead='';
+      row.status='❓ DATE UNKNOWN';row.evidence=row.where;
+      row.editable=false;row.undated=true;
+    }
+    row.hardDate=dateIn(row.hard)||'';
+    row.dueDate=row.hardDate;                       // lets dueLabel/filters reuse existing code
+    const lm=(row.lead||'').match(/(\d+)/);
+    row.leadDays=lm?+lm[1]:0;
+    row.triggerDate=(row.hardDate&&row.leadDays)?addWorkingDays(row.hardDate,-row.leadDays):row.hardDate;
+    row.sortDate=row.triggerDate||row.hardDate||'9999';
+    row.daysLeft=row.hardDate?daysBetween(t,row.hardDate):null;
+    row.sk=obStatusKey(row.status||'');
+    if(row.sk!=='done'&&row.sk!=='lapsed'&&row.hardDate&&row.hardDate<t)row.sk='overdue';
+    // lead blown = we are already inside the window the action needs, whatever the calendar says
+    row.leadBlown=row.sk!=='done'&&row.sk!=='lapsed'&&row.triggerDate&&row.triggerDate<=t&&row.daysLeft>=0;
+    row.rung=row.daysLeft===null?null:
+      row.daysLeft<0?'OVERDUE':row.daysLeft===0?'T-0':row.daysLeft<=1?'T-1':
+      row.daysLeft<=3?'T-3':row.daysLeft<=5?'T-5':row.daysLeft<=10?'T-10':row.daysLeft<=21?'T-21':null;
+    row.created='';row.notes=[];row.pagesList=parsePages(row.text+' '+(row.evidence||''));
+    row.domain=row.domain||'—';
+    rows.push(row);
+  }
+  model.OB=rows;
+}
+// Urgent = inside T-5, already past the hard date, or inside the lead window. These pin to the
+// top of every tab — an obligation you cannot see is the whole failure this register exists for.
+function obUrgent(){
+  return model.OB.filter(r=>r.sk!=='done'&&r.sk!=='lapsed'&&
+      (r.sk==='overdue'||r.leadBlown||(r.daysLeft!==null&&r.daysLeft<=5)))
+    .sort((a,b)=>(a.sortDate<b.sortDate?-1:a.sortDate>b.sortDate?1:0));
+}
+function obAmt(r){return(r.amount||'').replace(/\*\*/g,'').trim();}
+function obLabel(r){
+  if(r.sk==='done')return'done';
+  if(r.sk==='lapsed')return'lapsed';
+  if(r.undated)return'no date';
+  if(r.daysLeft===null)return'no date';
+  if(r.daysLeft<0)return(-r.daysLeft)+'d over';
+  if(r.daysLeft===0)return'TODAY';
+  if(r.daysLeft===1)return'tomorrow';
+  return'in '+r.daysLeft+'d';
+}
 function nextId(prefix){
   let max=0;
   for(const l of lines){const re=new RegExp(prefix+'-(\\d+)','g');let m;while((m=re.exec(l)))max=Math.max(max,+m[1]);}
@@ -389,7 +487,7 @@ function setCell(row,col,val){
   else if(ri>=0)idx=row.ccStart+row.ccLen-row.rlen+ri;
   else return;
   row.cells[idx]=' '+esc4cell(val)+' ';
-  lines[row.line]=row.cells.join('|');
+  (row.doc==='OB'?obLines:lines)[row.line]=row.cells.join('|');
   row[col]=val;
 }
 function bumpUpdated(note){
@@ -461,6 +559,51 @@ async function ghPutGitData(message,payload){
   if(!upd.ok)throw new Error('ref update '+upd.status);
   sha=blob.sha;
 }
+async function ghFetchOB(){
+  const r=await fetch(OB_API+'?ref='+BRANCH,{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===401||r.status===403)throw new Error('AUTH');
+  if(r.status===404){obLoaded=false;model.OB=[];return;} // register not created yet — not an error
+  if(!r.ok)throw new Error('GitHub '+r.status);
+  const j=await r.json();
+  obSha=j.sha;
+  let content='';
+  if(j.content&&j.encoding==='base64'){content=b64decode(j.content);}
+  else{
+    const b=await fetch(`${GH}/git/blobs/${j.sha}`,{headers:ghHeaders(),cache:'no-store'});
+    if(!b.ok)throw new Error('Blob read '+b.status);
+    const bj=await b.json();
+    if(!bj.content)throw new Error('Blob returned no content');
+    content=b64decode(bj.content);
+  }
+  if(!content.trim())throw new Error('Obligations register came back empty — not rendering');
+  parseOB(content);obLoaded=true;
+}
+async function ghPutOB(message){
+  const payload=obLines.join(obEOL);
+  const body={message:'live-OQ: '+message, content:b64encode(payload), sha:obSha, branch:BRANCH};
+  const r=await fetch(OB_API,{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+  if(r.status===409||r.status===422)throw new Error('CONFLICT');
+  if(!r.ok)throw new Error('GitHub write '+r.status);
+  const j=await r.json();
+  obSha=j.content.sha;
+}
+async function commitOB(op,message){
+  try{
+    op();
+    const i=obLines.findIndex(l=>l.startsWith('updated:'));
+    if(i>=0)obLines[i]=`updated: ${today()}`;
+    try{ await ghPutOB(message); }
+    catch(e){
+      if(e.message!=='CONFLICT')throw e;
+      toast('Obligations changed remotely — re-syncing…');
+      await ghFetchOB();draw();toast('Re-synced — try again',3200);return;
+    }
+    await ghFetchOB();draw();toast('Saved');
+  }catch(e){
+    toast(e.message==='AUTH'?'Token needed / rejected':'Save failed: '+e.message,4000);
+    await ghFetchOB().catch(()=>{});draw();
+  }
+}
 async function commit(op,message){
   try{
     op(); bumpUpdated(message);
@@ -497,11 +640,13 @@ function applyTheme(){document.documentElement.dataset.theme=S.theme==='dark'?'d
 function liveRows(){return[...model.OQ,...model.CN];}
 function tabRows(){
   if(S.tab==='AR')return[...model.AR,...liveRows().filter(r=>r.sk==='resolved')];
+  if(S.tab==='OB')return model.OB.filter(r=>r.sk!=='done');
   return model[S.tab].filter(r=>r.sk!=='resolved');
 }
 function tabCounts(){
   return{OQ:model.OQ.filter(r=>r.sk!=='resolved').length,
          CN:model.CN.filter(r=>r.sk!=='resolved').length,
+         OB:model.OB.filter(r=>r.sk!=='done'&&r.sk!=='lapsed').length,
          AR:model.AR.length+liveRows().filter(r=>r.sk==='resolved').length};
 }
 function overdueRows(){
@@ -533,7 +678,8 @@ function matches(r){
 }
 function sortRows(rows){
   const c={
-    due:(a,b)=>(a.dueDate||'9999')<(b.dueDate||'9999')?-1:(a.dueDate||'9999')>(b.dueDate||'9999')?1:0,
+    // OB rows carry sortDate = trigger date, so the ladder — not the headline date — sets the order
+    due:(a,b)=>(a.sortDate||a.dueDate||'9999')<(b.sortDate||b.dueDate||'9999')?-1:(a.sortDate||a.dueDate||'9999')>(b.sortDate||b.dueDate||'9999')?1:0,
     age:(a,b)=>(a.created||'9999')<(b.created||'9999')?-1:1,
     domain:(a,b)=>a.domain.localeCompare(b.domain)
   }[S.sort];
@@ -560,8 +706,8 @@ function drawHeader(){
   $('pcount').textContent=cl+'/5';
   $('pfill').style.width=Math.min(100,cl*20)+'%';
   const tc=tabCounts();
-  const names={OQ:'Open Questions',CN:'Contradictions',AR:'Archive'};
-  $('tabs').innerHTML=['OQ','CN','AR'].map(k=>
+  const names={OQ:'Open Questions',CN:'Contradictions',OB:'Obligations',AR:'Archive'};
+  $('tabs').innerHTML=['OQ','CN','OB','AR'].map(k=>
     `<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${names[k]}<span class="cnt">${tc[k]}</span></button>`).join('');
   $('synclabel').textContent=lastSync?('synced '+syncAgo()):'not synced';
 }
@@ -571,10 +717,23 @@ function syncAgo(){
   return Math.round(m/60)+'h ago';
 }
 function drawStrip(){
+  if(S.tab==='AR'){$('strip').innerHTML='';return;}
+  // Obligations pin above everything, on every tab. A money-or-rights deadline you have to
+  // click a tab to see is exactly the failure this register was built to stop.
+  const ob=obUrgent();
   const rows=overdueRows();
-  if(!rows.length||S.tab==='AR'){$('strip').innerHTML='';return;}
+  if(!ob.length&&!rows.length){$('strip').innerHTML='';return;}
   const shown=rows.slice(0,5);
-  $('strip').innerHTML=`<div class="strip">
+  const obBlock=ob.length?`<div class="strip" style="border-color:#c2410c">
+    <div class="striphead"><span class="stripdot" style="background:#c2410c"></span><span class="striplabel">Hard deadlines</span>
+      <span class="stripsum">${ob.length} inside the window — money, licences or rights, not decisions</span></div>
+    ${ob.map(r=>`<button class="striprow" data-open="${r.id}">
+      <span class="typechip ob">OB</span>
+      <span class="q">${render(firstLine(r.text))}${obAmt(r)&&obAmt(r)!=='—'?' <b>'+escHtml(obAmt(r))+'</b>':''}</span>
+      <span class="dom">${escHtml(r.domain)}</span>
+      <span class="due over">${obLabel(r)}${r.leadBlown&&r.daysLeft>0?' · lead blown':''}</span></button>`).join('')}
+  </div>`:'';
+  const oqBlock=rows.length?`<div class="strip">
     <div class="striphead"><span class="stripdot"></span><span class="striplabel">Needs you now</span>
       <span class="stripsum">${rows.length} past their gate date${rows.length>shown.length?' — oldest '+shown.length+' pinned, the rest are in the list':''}</span></div>
     ${shown.map(r=>`<button class="striprow" data-open="${r.id}">
@@ -582,7 +741,8 @@ function drawStrip(){
       <span class="q">${render(firstLine(r.text))}</span>
       <span class="dom">${escHtml(r.domain)}</span>
       <span class="due">${dueLabel(r)}</span></button>`).join('')}
-  </div>`;
+  </div>`:'';
+  $('strip').innerHTML=obBlock+oqBlock;
 }
 function firstLine(t){
   const s=t.replace(/\[\[([^\]\\|]+?)\\\|([^\]]+?)\]\]/g,'$2').replace(/\[\[([^\]]+?)\]\]/g,'$1');
@@ -639,7 +799,7 @@ function drawMain(withToolbar=true){
   drawHeader();drawStrip();
   if(withToolbar)drawToolbar();
   drawComposer();
-  $('listtitle').textContent={OQ:'Open questions',CN:'Contradictions',AR:'Archive'}[S.tab];
+  $('listtitle').textContent={OQ:'Open questions',CN:'Contradictions',OB:'Obligations & deadlines',AR:'Archive'}[S.tab];
   const groups=grouped();
   if(!groups.length){
     $('list').innerHTML='<div class="empty"><div class="e1">Nothing here.</div><div class="e2">Clear ground, or add a row.</div></div>';
@@ -659,6 +819,7 @@ function drawMain(withToolbar=true){
   }).join('');
 }
 function rowHtml(r,t){
+  if(r.type==='OB')return obRowHtml(r);
   const over=r.dueDate&&r.dueDate<t&&r.sk!=='resolved';
   const openRow=S.openId===r.id;
   return`<article class="row" data-id="${r.id}">
@@ -671,6 +832,48 @@ function rowHtml(r,t){
     </button>
     ${openRow?detailHtml(r):''}
   </article>`;
+}
+function obRowHtml(r){
+  const openRow=S.openId===r.id;
+  const urgent=r.sk==='overdue'||r.leadBlown||(r.daysLeft!==null&&r.daysLeft<=5);
+  const done=r.sk==='done'||r.sk==='lapsed';
+  return`<article class="row" data-id="${r.id}">
+    <button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
+      <span class="typechip ob">OB</span>
+      <span class="rq ${done?'resolved':''}">${render(firstLine(r.text))}</span>
+      ${obAmt(r)&&obAmt(r)!=='—'?`<span class="obamt">${escHtml(obAmt(r))}</span>`:''}
+      <span class="rdue ${urgent&&!done?'over':''}">${obLabel(r)}</span>
+      <span class="rcaret">${openRow?'▾':'▸'}</span>
+    </button>
+    ${openRow?obDetail(r):''}
+  </article>`;
+}
+function obDetail(r){
+  const f=(k,v)=>`<div><div class="eyebrow">${k}</div><div class="agev">${v?render(v):'—'}</div></div>`;
+  const ladder=r.daysLeft===null?'no date — retrieve it':
+    `hard date ${r.hardDate} · lead ${r.lead||'—'} · alarms from ${r.triggerDate||'—'}` +
+    (r.leadBlown&&r.daysLeft>0?`  ⚠️ **lead time already blown — ${workingDaysBetween(today(),r.hardDate)} working day${workingDaysBetween(today(),r.hardDate)===1?'':'s'} left, including today, against the ${r.leadDays} this needs**`:'');
+  return`<div class="rdetail">
+    <div class="oqgrid">
+      <div>
+        ${f('Counterparty',r.counterparty)}
+        ${f('Pays / acts',r.actor)}
+        ${f('Countdown',ladder)}
+      </div>
+      <div>
+        ${f('Status',r.status)}
+        ${f('Evidence / notes',r.evidence)}
+        ${r.undated?f('Where to get the date',r.where):''}
+      </div>
+    </div>
+    <div class="actionbar">
+      ${r.editable&&r.sk!=='done'?
+        `<button class="abtn" data-obdone="${r.id}">✓ Mark done (needs evidence)</button>`:''}
+      ${r.editable&&r.sk!=='lapsed'&&r.sk!=='done'?
+        `<button class="abtn" data-oblapse="${r.id}">💤 Lapse by decision</button>`:''}
+      ${r.undated?'<span class="irregular">❓ no date yet — get it, then add the row properly in the vault</span>':''}
+      <span class="rowid">${r.id}</span>
+    </div></div>`;
 }
 function detailHtml(r){
   const body=r.type==='CN'?cnBody(r):oqBody(r);
@@ -745,7 +948,7 @@ function setStatus(r,sk){
   const msg=r.id+' → '+next;
   commit(()=>{const row=findRow(r.id);setCell(row,'status',val);},msg);
 }
-function findRow(id){for(const k of['CN','OQ','AR'])for(const r of model[k])if(r.id===id)return r;return null;}
+function findRow(id){for(const k of['CN','OQ','AR','OB'])for(const r of model[k])if(r.id===id)return r;return null;}
 function appendNote(r,text){
   const cur=(r.resolution&&r.resolution!=='—')?r.resolution+' ':'';
   commit(()=>{const row=findRow(r.id);setCell(row,'resolution',cur+'📝 '+today()+': '+text);},r.id+' note');
@@ -779,7 +982,7 @@ function addRow(){
 
 /* ================= events (delegated) ================= */
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-g],[data-dom],[data-st],[data-sort],[data-group],[data-ct],[data-act],#newbtn,#caddbtn,#clearbtn,#themebtn,#syncbtn,#connbtn,#scrim,#xbtn,#savetok,#forgettok');
+  const t=e.target.closest('[data-tab],[data-open],[data-g],[data-dom],[data-st],[data-sort],[data-group],[data-ct],[data-act],[data-obdone],[data-oblapse],#newbtn,#caddbtn,#clearbtn,#themebtn,#syncbtn,#connbtn,#scrim,#xbtn,#savetok,#forgettok');
   if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.openId=null;draw();return;}
   if(t.dataset.open!==undefined&&t.dataset.open){
@@ -794,6 +997,30 @@ document.addEventListener('click',e=>{
   if(t.dataset.group){S.grouping=S.grouping==='domain'?'date':'domain';drawMain();return;}
   if(t.dataset.ct){S.composerType=t.dataset.ct;syncDrafts();drawComposer();return;}
   if(t.dataset.act){e.stopPropagation();setStatus(findRow(t.dataset.id),t.dataset.act);return;}
+  // Closure needs a link — the register's rule, enforced here rather than trusted.
+  if(t.dataset.obdone){
+    e.stopPropagation();
+    const r=findRow(t.dataset.obdone);
+    const ev=prompt('Evidence to close '+r.id+' — payment reference, filing receipt, renewed licence number.\n\nNo evidence, no close.');
+    if(ev===null)return;
+    if(!ev.trim()){toast('Not closed — an obligation closes on evidence, not on memory',3600);return;}
+    commitOB(()=>{const row=findRow(r.id);
+      setCell(row,'status','✅ DONE '+today());
+      setCell(row,'evidence',(row.evidence&&row.evidence!=='—'?row.evidence+' · ':'')+'✅ '+today()+': '+ev.trim());
+    },r.id+' done');
+    return;
+  }
+  if(t.dataset.oblapse){
+    e.stopPropagation();
+    const r=findRow(t.dataset.oblapse);
+    const why=prompt('Lapsing '+r.id+' by decision — why? This is logged, and stops it being re-raised as a miss.');
+    if(why===null||!why.trim())return;
+    commitOB(()=>{const row=findRow(r.id);
+      setCell(row,'status','💤 LAPSED — by decision');
+      setCell(row,'evidence',(row.evidence&&row.evidence!=='—'?row.evidence+' · ':'')+'💤 '+today()+': '+why.trim());
+    },r.id+' lapsed');
+    return;
+  }
   switch(t.id){
     case'newbtn':S.composerOpen=!S.composerOpen;drawComposer();break;
     case'caddbtn':syncDrafts();addRow();break;
@@ -833,11 +1060,17 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token())l
 async function load(quiet){
   if(!token()){
     if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){
+      try{const o=await fetch('ob.md');if(o.ok){parseOB(await o.text());obLoaded=true;}}catch(_){}
       try{const r=await fetch('oq.md');if(r.ok){window.__loadMarkdown(await r.text());return;}}catch(_){}
+      if(obLoaded){lastSync=Date.now();draw();return;}
     }
     S.settingsOpen=true;draw();return;
   }
-  try{await ghFetch();draw();if(!quiet)toast('Synced');}
+  try{
+    await ghFetch();
+    // the obligations register must never take the OQ register down with it
+    try{await ghFetchOB();}catch(e){if(e.message==='AUTH')throw e;toast('Obligations register: '+e.message,4000);}
+    draw();if(!quiet)toast('Synced');}
   catch(e){
     if(e.message==='AUTH'){toast('Token needed / rejected');S.settingsOpen=true;draw();}
     else toast('Load failed: '+e.message,4000);
