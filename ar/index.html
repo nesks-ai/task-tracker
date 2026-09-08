@@ -284,7 +284,11 @@ async function putStore(message){
  * copy we started from. Three writers share this file — this window, the
  * dispatcher, and outlook-inbox-triage.
  */
-async function commit(op,message){
+async function commit(op,message,opts){
+  // opts.redraw:false for a save that changes nothing on screen — above all the
+  // debounced body autosave, which used to rebuild the whole list 1.2s after
+  // every pause in typing and throw away the very textarea being typed into.
+  const redraw=!opts||opts.redraw!==false;
   try{
     op(store);
     try{ await putStore(message); }
@@ -293,7 +297,7 @@ async function commit(op,message){
       toast('Changed elsewhere — merging…');
       await fetchStore(); op(store); await putStore(message);
     }
-    draw();
+    if(redraw)draw();
   }catch(e){
     if(e.message==='AUTH'){toast('Token rejected — check the ⚙ settings',3600); openTok();}
     else toast('Save failed: '+e.message,4000);
@@ -401,7 +405,44 @@ function cardHTML(r){
   </div>`;
 }
 
+/* ---- keeping a live edit alive across a rebuild -------------------------
+   draw() replaces the whole list with innerHTML, which destroys every card's
+   DOM. Anything the browser stores ON the element rather than in our state is
+   lost with it: focus, the caret, the scroll inside the box, and the inline
+   `height` that the CSS resize handle writes when you drag a textarea taller.
+   Text itself already survives (cardHTML re-reads `pending` and `S.notes`), so
+   these three helpers cover the rest. Heights are kept per row id, not just for
+   the focused box, so resizing card A then editing card B does not shrink A. */
+const heights={};
+function rememberHeight(ta){ if(ta&&ta.style.height)heights[ta.dataset.id]=ta.style.height; }
+function captureEdit(){
+  const el=document.activeElement;
+  if(!el||!el.dataset||!el.dataset.id)return null;
+  const isDraft=el.classList&&el.classList.contains('draft');
+  const isNote=el.classList&&el.classList.contains('notebox');
+  if(!isDraft&&!isNote)return null;
+  if(isDraft)rememberHeight(el);
+  return {id:el.dataset.id, kind:isDraft?'draft':'notebox',
+          start:el.selectionStart, end:el.selectionEnd, scroll:el.scrollTop};
+}
+function restoreEdit(s){
+  // heights first, for every card — not only the one being edited
+  for(const id in heights){
+    const t=document.querySelector(`textarea.draft[data-id="${id}"]`);
+    if(t)t.style.height=heights[id];
+  }
+  if(!s)return;
+  const sel=s.kind==='draft'
+    ? `textarea.draft[data-id="${s.id}"]` : `input.notebox[data-id="${s.id}"]`;
+  const el=document.querySelector(sel);
+  if(!el)return;
+  el.focus();
+  try{ el.setSelectionRange(s.start,s.end); }catch(_){}
+  el.scrollTop=s.scroll;
+}
+
 function draw(){
+  const live=captureEdit();
   const rows=openRows(), done=justDone();
   const hot=rows.filter(r=>heat(r)==='⏰'||heat(r)==='🔴').length;
   $('cnt').className='pill'+(hot?' hot':'');
@@ -432,6 +473,7 @@ function draw(){
   $('list').innerHTML=rows.map(cardHTML).join('')+
     (done.length?`<div class="note" style="margin-top:26px">Closed recently</div>`+
       done.map(cardHTML).join(''):'');
+  restoreEdit(live);
 }
 
 /* ------------------------------------------------------------------ actions */
@@ -439,6 +481,12 @@ let saveTimer=null;
 function queueBodySave(id,val){
   pending[id]=val;
   const n=$('sn-'+id); if(n)n.textContent='unsaved…';
+  // Send is disabled while the body is empty. Because the autosave no longer
+  // redraws, that derived state has to be updated here — otherwise a row that
+  // arrived with an empty body (AR-004 did) stays unsendable however much he
+  // types into it.
+  const btn=document.querySelector(`#card-${id} [data-act="send"]`);
+  if(btn)btn.disabled=!val.trim();
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>saveBody(id),1200);
 }
@@ -448,9 +496,11 @@ async function saveBody(id){
   await commit(st=>{
     const r=st.rows.find(x=>x.id===id);
     if(r){ r.body=val; r.body_edited_at=new Date().toISOString().replace(/\.\d+Z$/,'Z'); }
-  },`edit body ${id}`);
-  delete pending[id];
-  const n=$('sn-'+id); if(n)n.textContent='saved';
+  },`edit body ${id}`,{redraw:false});   // never rebuild the box he is typing in
+  // Only clear the buffer if he has not typed again while the save was in
+  // flight — otherwise the newer keystrokes would be dropped on the next draw.
+  if(pending[id]===val)delete pending[id];
+  const n=$('sn-'+id); if(n)n.textContent=pending[id]===undefined?'saved':'unsaved…';
 }
 
 function openSend(id){
@@ -536,8 +586,13 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('blur',e=>{
   const ta=e.target.closest&&e.target.closest('textarea.draft');
-  if(ta){clearTimeout(saveTimer);saveBody(ta.dataset.id);}
+  if(ta){rememberHeight(ta);clearTimeout(saveTimer);saveBody(ta.dataset.id);}
 },true);
+// Dragging the resize handle ends in a mouseup and writes an inline height onto
+// the element. Record it then, so the size survives the next rebuild.
+document.addEventListener('mouseup',()=>{
+  document.querySelectorAll('textarea.draft').forEach(rememberHeight);
+});
 
 document.addEventListener('click',async e=>{
   const t=e.target.closest('[data-act],[data-close],#syncbtn,#themebtn,#connbtn,#scrim,#savetok,#forgettok,#sendconfirm');
@@ -580,7 +635,14 @@ async function load(){
   // A backgrounded tab goes stale; re-read when he comes back to it. Cheap, and
   // it means the list he is looking at reflects sends the dispatcher completed.
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden && lastSync && Date.now()-lastSync>60000) load();
+    if(document.hidden || !lastSync || Date.now()-lastSync<=60000) return;
+    // Never refetch on top of an edit in progress: a background load would pull
+    // the stored body over what he is part-way through typing.
+    const editing=document.activeElement&&document.activeElement.classList
+      &&(document.activeElement.classList.contains('draft')
+        ||document.activeElement.classList.contains('notebox'));
+    if(editing || Object.keys(pending).length) return;
+    load();
   });
   // Test hook, mirroring the OQ app's __loadMarkdown.
   window.__loadStore=j=>{store=j;draw();};
