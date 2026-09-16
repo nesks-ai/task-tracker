@@ -186,14 +186,14 @@ function Settings() {
 /* ------------------------------------------------------------------ app */
 function App() {
   const doc = store.doc;
-  if (!doc) return html`<${Header} /><div class="p-6 text-slate-500">${store.status === 'notoken' ? 'Paste a token in settings to load the board.' : store.error || 'Loading…'}</div>${ui.settingsOpen || store.status === 'notoken' ? html`<${Settings} />` : null}`;
+  if (!doc) return html`<div><${Header} /><div class="p-6 text-slate-500">${store.status === 'notoken' ? 'Paste a token in settings to load the board.' : store.error || 'Loading…'}</div></div>${ui.settingsOpen || store.status === 'notoken' ? html`<${Settings} />` : null}`;
   const c = ctx(doc, todayISO());
   const b = matrixBuckets(c); ui.trayCount = b.unscored.length + b.undated.length;
   const View = { board: BoardView, matrix: MatrixView, timeline: TimelineView }[ui.view] || BoardView;
   const panelOpen = !!ui.selectedKind;
-  return html`<${Header} />
-    <div class=${cls('flex', panelOpen && !ui.isPhone && 'pr-[420px]')}>
-      <main class="flex-1 min-w-0"><${View} doc=${doc} c=${c} ui=${ui} actions=${actions} /></main>
+  return html`<div class=${cls(panelOpen && !ui.isPhone && 'pr-[420px]')}>
+      <${Header} />
+      <main class="min-w-0"><${View} doc=${doc} c=${c} ui=${ui} actions=${actions} /></main>
     </div>
     ${panelOpen ? html`<${DetailPanel} doc=${doc} c=${c} ui=${ui} actions=${actions} />` : null}
     ${ui.settingsOpen ? html`<${Settings} />` : null}`;

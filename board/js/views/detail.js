@@ -9,7 +9,7 @@ const Text = ({ value, onCommit, placeholder, area }) => area
 
 function Shell({ title, onBack, onClose, ui, children }) {
   return html`
-    ${!ui.isPhone ? html`<div class="fixed inset-0 z-20" onClick=${onClose}></div>` : null}
+    ${!ui.isPhone ? html`<div class="fixed inset-0 z-10" onClick=${onClose}></div>` : null}
     <aside class=${cls('fixed z-30 bg-white dark:bg-slate-800 shadow-2xl overflow-y-auto flex flex-col', ui.isPhone ? 'inset-0' : 'top-0 right-0 bottom-0 w-[420px] border-l border-slate-200 dark:border-slate-700')}>
       <div class="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-2 flex items-center gap-2">
         ${onBack ? html`<button onClick=${onBack} title="Back to project"><${Icon} name="back" /></button>` : null}
