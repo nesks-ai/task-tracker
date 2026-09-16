@@ -146,7 +146,7 @@ export function createStore({ fetchImpl, fixture = null, onChange = () => {}, st
   };
 
   store.refreshIfStale = async () => {
-    if (fixture || pending.length || inflight) return;
+    if (!store.doc || fixture || pending.length || inflight) return;
     const r = await fetchFn(API + '?ref=' + BRANCH, { headers: heads(), cache: 'no-store' });
     if (!r.ok) return;
     const j = await r.json();

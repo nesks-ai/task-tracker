@@ -1,5 +1,5 @@
 import { html, cls, fmtDate, Dot, Badge, StageName, Icon, Btn, useState } from '../ui.js';
-import { boardRows, badge, STAGES, INBOX } from '../model.js';
+import { boardRows, badge, STAGES } from '../model.js';
 
 export function TaskCard({ task, c, actions, draggable = true }) {
   const b = badge(task, c);

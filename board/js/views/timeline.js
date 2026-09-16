@@ -19,16 +19,19 @@ export default function TimelineView({ doc, c, ui, actions }) {
             style=${`left:${i * weekW}%; width:${weekW}%`}>${fmtDate(w)}</div>`)}
         </div>
       </div>
-      ${tl.rows.map(({ project, undated, bars }) => html`<div key=${project.id ?? '__inbox'} class="flex border-b border-slate-200/70 dark:border-slate-700/70">
+      ${tl.rows.map(({ project, undated, bars }) => {
+        const outside = bars.filter(b => b.start > tl.end || b.end < tl.start).length;
+        return html`<div key=${project.id ?? '__inbox'} class="flex border-b border-slate-200/70 dark:border-slate-700/70">
         <div style=${`width:${LABEL_W}px`} class="shrink-0 p-2 sticky left-0 bg-stone-50 dark:bg-slate-900">
           <button class=${cls('font-medium text-sm text-left truncate block max-w-full', project.id !== null && 'hover:underline')} disabled=${project.id === null}
             onClick=${() => project.id !== null && actions.select('project', project.id)}>${project.name}</button>
-          <div class="text-[11px] text-slate-500">${bars.length} dated${undated ? ` · ${undated} undated` : ''}</div>
+          <div class="text-[11px] text-slate-500">${bars.length} dated${undated ? ` · ${undated} undated` : ''}${outside ? ` · ${outside} outside window` : ''}</div>
         </div>
         <div class="flex-1 relative" style=${`height:${Math.max(40, bars.length * 22 + 8)}px`}>
           ${tl.weeks.map((w, i) => html`<div class="absolute top-0 bottom-0 border-l border-slate-200/50 dark:border-slate-700/50" style=${`left:${i * weekW}%`}></div>`)}
           <div class="absolute top-0 bottom-0 border-l-2 border-slate-900 dark:border-white z-[5]" style=${`left:${todayLeft}%`}></div>
           ${bars.map((b, i) => {
+            if (b.start > tl.end || b.end < tl.start) return null;
             const startPct = pct(b.start < tl.start ? tl.start : b.start);
             const endPct = pct(b.end > tl.end ? tl.end : b.end) + (100 / totalDays);
             const oneDay = b.start === b.end;
@@ -39,7 +42,8 @@ export default function TimelineView({ doc, c, ui, actions }) {
               style=${`top:${4 + i * 22}px; left:${startPct}%; ${oneDay ? 'width:6px' : `width:${Math.max(0.6, endPct - startPct)}%`}`}>${oneDay ? '' : b.task.title}</button>`;
           })}
         </div>
-      </div>`)}
+      </div>`;
+      })}
     </div>
   </div>`;
 }

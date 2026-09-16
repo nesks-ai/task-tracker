@@ -69,7 +69,7 @@ const actions = {
       owner: 'Nibras', waitingOn: '', chaseDate: null, blockedBy: [], source: 'manual', evidence: '', legacyId: null,
       createdAt: now(), updatedAt: now(), closedAt: null, ...fields };
     if (t.stage === 'done') t.closedAt = now();
-    store.mutate(doc => { doc.tasks.push(t); }, `add task ${t.title || id}`);
+    store.mutate(doc => { if (!doc.tasks.some(x => x.id === id)) doc.tasks.push(t); }, `add task ${t.title || id}`);
     pushUndo({ kind: 'task', id, prev: null });
     return id;
   },
@@ -84,7 +84,10 @@ const actions = {
         if (patch.stage !== 'done') t.closedAt = null;
         if (patch.stage !== 'waiting' && !('waitingOn' in patch)) { t.waitingOn = ''; }
       }
-      if ('projectId' in patch && patch.projectId !== cur.projectId) t.blockedBy = [];
+      if ('projectId' in patch && patch.projectId !== cur.projectId) {
+        t.blockedBy = [];
+        for (const o of doc.tasks) if (o.id !== id) o.blockedBy = (o.blockedBy || []).filter(b => b !== id);
+      }
       t.updatedAt = now();
     }, `update ${cur.title}`);
   },
@@ -109,7 +112,7 @@ const actions = {
     const order = Math.max(0, ...store.doc.projects.map(p => p.order || 0)) + 1;
     const p = { id, name: 'New project', domain: null, status: 'active', order, pinned: false, owner: 'Nibras',
       createdAt: now(), updatedAt: now(), ...fields };
-    store.mutate(doc => { doc.projects.push(p); }, `add project ${p.name}`);
+    store.mutate(doc => { if (!doc.projects.some(x => x.id === id)) doc.projects.push(p); }, `add project ${p.name}`);
     pushUndo({ kind: 'project', id, prev: null });
     return id;
   },
@@ -123,6 +126,7 @@ const actions = {
   setView(v) { ui.view = v; draw(); },
   toggleHidden() { ui.showHidden = !ui.showHidden; draw(); },
   undo() {
+    if (!store.doc) return;
     const e = undoStack.pop(); if (!e) return;
     store.mutate(doc => {
       const list = e.kind === 'task' ? doc.tasks : doc.projects;
@@ -203,9 +207,10 @@ async function boot() {
   let fixture = null;
   if (fixtureMode) fixture = await (await fetch('test/fixture.json', { cache: 'no-store' })).json();
   store = createStore({ fixture, onChange: draw });
+  undoStack.length = 0;
   draw();
   if (!fixture && !store.hasToken()) { store.status = 'notoken'; draw(); return; }
-  try { await store.load(); } catch (e) { store.error = e.message; draw(); }
+  try { await store.load(); } catch (e) { store.error = e.message; store.status = 'error'; draw(); }
 }
 
 document.addEventListener('keydown', e => {
