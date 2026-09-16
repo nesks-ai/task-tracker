@@ -15,10 +15,16 @@ test('addDays crosses month ends and DST without drift', () => {
   assert.equal(M.addDays('2026-09-16', 0), '2026-09-16');
 });
 
-test('startBy subtracts leadDays in calendar days; null without due', () => {
+test('startBy subtracts leadDays in calendar days; null without due; default 1 when missing', () => {
   assert.equal(M.startBy(t('b_urgent_today')), '2026-09-16');
   assert.equal(M.startBy(t('b_quick')), '2026-09-16');       // leadDays 0
   assert.equal(M.startBy(t('b_undated')), null);
+  // Missing leadDays defaults to 1
+  assert.equal(M.startBy({ due: '2026-09-20' }), '2026-09-19');
+  // Explicit null leadDays defaults to 1
+  assert.equal(M.startBy({ due: '2026-09-20', leadDays: null }), '2026-09-19');
+  // Explicit 0 leadDays stays 0
+  assert.equal(M.startBy({ due: '2026-09-20', leadDays: 0 }), '2026-09-20');
 });
 
 test('isOverdue: due before today and not done', () => {

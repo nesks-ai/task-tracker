@@ -37,7 +37,8 @@ export const isOpen = task => task.stage !== 'done';
 
 export function startBy(task) {
   if (!task.due) return null;
-  return addDays(task.due, -(Number(task.leadDays) || 0));
+  const lead = task.leadDays == null ? 1 : Number(task.leadDays);
+  return addDays(task.due, -lead);
 }
 
 export function isOverdue(task, c) {
