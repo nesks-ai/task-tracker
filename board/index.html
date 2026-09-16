@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Board</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter','system-ui','-apple-system','sans-serif'] } } } };</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { overscroll-behavior: none; }
+  select, input, textarea { font-size: 16px !important; }
+  .card[draggable=true] { cursor: grab; }
+  .drop-ok { outline: 2px dashed #94a3b8; outline-offset: -2px; }
+  .hatched { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,.18) 4px 8px); }
+  .spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans">
+<div id="app"></div>
+<script type="module">
+import { html, render, useState, useEffect, cls, todayISO, Icon, Btn } from './js/ui.js';
+import { ctx, newId, matrixBuckets } from './js/model.js';
+import { createStore } from './js/store.js';
+import BoardView from './js/views/board.js';
+import MatrixView from './js/views/matrix.js';
+import TimelineView from './js/views/timeline.js';
+import DetailPanel from './js/views/detail.js';
+
+const THEME_KEY = 'board_theme';
+const params = new URLSearchParams(location.search);
+const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+const fixtureMode = isLocal && params.get('fixture') === '1';
+
+/* ---------------------------------------------------------------- theme */
+function applyTheme() {
+  const pref = localStorage.getItem(THEME_KEY);
+  const dark = pref ? pref === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.classList.toggle('dark', dark);
+  return dark;
+}
+let isDark = applyTheme();
+
+/* ---------------------------------------------------------------- state */
+const ui = { view: params.get('view') || 'board', selectedKind: null, selectedId: null,
+             isPhone: matchMedia('(max-width: 767px)').matches, showHidden: false, settingsOpen: false, phoneProject: null };
+matchMedia('(max-width: 767px)').addEventListener('change', e => { ui.isPhone = e.matches; draw(); });
+
+const undoStack = [];
+const pushUndo = entry => { undoStack.push(entry); if (undoStack.length > 40) undoStack.shift(); };
+const deep = x => JSON.parse(JSON.stringify(x));
+const now = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+
+let store;
+const draw = () => render(html`<${App} />`, document.getElementById('app'));
+
+const findTask = (doc, id) => doc.tasks.find(t => t.id === id);
+const findProject = (doc, id) => doc.projects.find(p => p.id === id);
+
+/* -------------------------------------------------------------- mutators */
+const actions = {
+  addTask(fields = {}) {
+    if (!store.doc) return null;
+    const id = newId('b');
+    const t = { id, projectId: null, title: '', detail: '', stage: 'next', importance: null, due: null, leadDays: 1,
+      owner: 'Nibras', waitingOn: '', chaseDate: null, blockedBy: [], source: 'manual', evidence: '', legacyId: null,
+      createdAt: now(), updatedAt: now(), closedAt: null, ...fields };
+    if (t.stage === 'done') t.closedAt = now();
+    store.mutate(doc => { if (!doc.tasks.some(x => x.id === id)) doc.tasks.push(t); }, `add task ${t.title || id}`);
+    pushUndo({ kind: 'task', id, prev: null });
+    return id;
+  },
+  updateTask(id, patch) {
+    const cur = findTask(store.doc, id); if (!cur) return;
+    pushUndo({ kind: 'task', id, prev: deep(cur) });
+    store.mutate(doc => {
+      const t = findTask(doc, id); if (!t) return;
+      Object.assign(t, patch);
+      if ('stage' in patch) {
+        if (patch.stage === 'done' && !t.closedAt) t.closedAt = now();
+        if (patch.stage !== 'done') t.closedAt = null;
+        if (patch.stage !== 'waiting' && !('waitingOn' in patch)) { t.waitingOn = ''; }
+      }
+      if ('projectId' in patch && patch.projectId !== cur.projectId) {
+        t.blockedBy = [];
+        for (const o of doc.tasks) if (o.id !== id) o.blockedBy = (o.blockedBy || []).filter(b => b !== id);
+      }
+      t.updatedAt = now();
+    }, `update ${cur.title}`);
+  },
+  moveTask(id, { stage, projectId } = {}) {
+    const patch = {};
+    if (stage !== undefined) patch.stage = stage;
+    if (projectId !== undefined) patch.projectId = projectId;
+    actions.updateTask(id, patch);
+  },
+  deleteTask(id) {
+    const cur = findTask(store.doc, id); if (!cur) return;
+    pushUndo({ kind: 'task', id, prev: deep(cur), deleted: true });
+    store.mutate(doc => {
+      doc.tasks = doc.tasks.filter(t => t.id !== id);
+      for (const t of doc.tasks) t.blockedBy = (t.blockedBy || []).filter(b => b !== id);
+    }, `delete ${cur.title}`);
+    if (ui.selectedId === id) actions.closePanel();
+  },
+  addProject(fields = {}) {
+    if (!store.doc) return null;
+    const id = newId('p');
+    const order = Math.max(0, ...store.doc.projects.map(p => p.order || 0)) + 1;
+    const p = { id, name: 'New project', domain: null, status: 'active', order, pinned: false, owner: 'Nibras',
+      createdAt: now(), updatedAt: now(), ...fields };
+    store.mutate(doc => { if (!doc.projects.some(x => x.id === id)) doc.projects.push(p); }, `add project ${p.name}`);
+    pushUndo({ kind: 'project', id, prev: null });
+    return id;
+  },
+  updateProject(id, patch) {
+    const cur = findProject(store.doc, id); if (!cur) return;
+    pushUndo({ kind: 'project', id, prev: deep(cur) });
+    store.mutate(doc => { const p = findProject(doc, id); if (p) { Object.assign(p, patch); p.updatedAt = now(); } }, `update project ${cur.name}`);
+  },
+  select(kind, id) { ui.selectedKind = kind; ui.selectedId = id; draw(); },
+  closePanel() { ui.selectedKind = null; ui.selectedId = null; draw(); },
+  setView(v) { ui.view = v; draw(); },
+  toggleHidden() { ui.showHidden = !ui.showHidden; draw(); },
+  undo() {
+    if (!store.doc) return;
+    const e = undoStack.pop(); if (!e) return;
+    store.mutate(doc => {
+      const list = e.kind === 'task' ? doc.tasks : doc.projects;
+      const i = list.findIndex(x => x.id === e.id);
+      if (e.prev === null) { if (i >= 0) list.splice(i, 1); }           // undo an add
+      else if (i >= 0) list[i] = e.prev;                                  // undo an edit
+      else list.push(e.prev);                                             // undo a delete
+    }, 'undo');
+  },
+};
+
+/* --------------------------------------------------------------- header */
+function SyncDot() {
+  const s = store.status;
+  const label = { loading: 'Loading…', idle: store.lastSaved ? 'Saved' : 'Loaded', saving: 'Saving…', unsaved: 'Unsaved',
+                  error: 'Unsaved — retry', fixture: 'FIXTURE — not saving', notoken: 'No token' }[s] || s;
+  const color = s === 'error' || s === 'notoken' ? 'text-red-600' : s === 'fixture' ? 'text-amber-600' : s === 'idle' ? 'text-slate-400' : 'text-amber-500';
+  return html`<button class=${cls('text-xs', color)} title=${store.error || ''}
+    onClick=${() => { if (s === 'error') store.flush(); else if (s === 'idle') store.refreshIfStale(); }}>${label}</button>`;
+}
+
+function Header() {
+  const tabs = [['board', 'Board'], ['matrix', 'Matrix'], ['timeline', 'Timeline']].filter(([k]) => !(ui.isPhone && k === 'timeline'));
+  const trayCount = ui.trayCount || 0;
+  return html`<header class="sticky top-0 z-20 bg-stone-50/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-700">
+    <div class="flex items-center gap-2 px-3 py-2">
+      <nav class="flex gap-1">${tabs.map(([k, label]) => html`<button onClick=${() => actions.setView(k)}
+        class=${cls('px-3 py-1 rounded-md text-sm font-medium', ui.view === k ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'hover:bg-slate-200 dark:hover:bg-slate-700')}>
+        ${label}${k === 'matrix' && trayCount ? html`<span class="ml-1 text-[10px] px-1.5 rounded-full bg-amber-500 text-white">${trayCount}</span>` : null}</button>`)}</nav>
+      <div class="flex-1"></div>
+      <${SyncDot} />
+      <${Btn} title="Undo (Ctrl+Z)" onClick=${actions.undo} disabled=${!store.doc || !undoStack.length}><${Icon} name="undo" /></${Btn}>
+      <${Btn} title="New task" kind="primary" disabled=${!store.doc} onClick=${() => { const id = actions.addTask({ projectId: ui.selectedKind === 'project' ? ui.selectedId : null }); actions.select('task', id); }}><${Icon} name="plus" /> Task</${Btn}>
+      <${Btn} title="New project" disabled=${!store.doc} onClick=${() => { const id = actions.addProject(); actions.select('project', id); }}><${Icon} name="plus" /> Project</${Btn}>
+      <${Btn} title="Theme" onClick=${() => { localStorage.setItem(THEME_KEY, isDark ? 'light' : 'dark'); isDark = applyTheme(); draw(); }}><${Icon} name=${isDark ? 'sun' : 'moon'} /></${Btn}>
+      <${Btn} title="Settings" onClick=${() => { ui.settingsOpen = true; draw(); }}><${Icon} name="gear" /></${Btn}>
+    </div>
+    ${fixtureMode ? html`<div class="bg-amber-400 text-amber-950 text-xs text-center py-0.5">FIXTURE — not saving</div>` : null}
+  </header>`;
+}
+
+function Settings() {
+  const [val, setVal] = useState('');
+  return html`<div class="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center" onClick=${() => { ui.settingsOpen = false; draw(); }}>
+    <div class="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:w-96 space-y-3" onClick=${e => e.stopPropagation()}>
+      <h2 class="font-semibold">GitHub token</h2>
+      <p class="text-sm text-slate-500">Fine-grained PAT for nesks-ai/llm-wiki (Contents read/write). Shared with the OQ and AR windows.</p>
+      <input type="password" class="w-full border rounded-md px-2 py-1 dark:bg-slate-900" placeholder=${store.hasToken() ? '••••••••  (saved)' : 'ghp_…'} value=${val} onInput=${e => setVal(e.target.value)} />
+      <div class="flex gap-2 justify-end">
+        <${Btn} kind="danger" onClick=${() => { store.forgetToken(); ui.settingsOpen = false; draw(); }}>Forget</${Btn}>
+        <${Btn} kind="primary" onClick=${async () => {
+          if (!val.trim()) { ui.settingsOpen = false; draw(); return; }          // nothing pasted → just close
+          if (store.doc && store.pendingCount()) await store.flush();            // push unsaved edits first
+          if (store.doc && store.pendingCount()) { ui.settingsOpen = false; draw(); return; }  // flush failed → keep the store; header shows the red state
+          store.setToken(val); ui.settingsOpen = false; await boot();
+        }}>Save</${Btn}>
+      </div>
+    </div></div>`;
+}
+
+/* ------------------------------------------------------------------ app */
+function App() {
+  const doc = store.doc;
+  if (!doc) return html`<div><${Header} /><div class="p-6 text-slate-500">${store.status === 'notoken' ? 'Paste a token in settings to load the board.' : store.error || 'Loading…'}</div></div>${ui.settingsOpen || store.status === 'notoken' ? html`<${Settings} />` : null}`;
+  const c = ctx(doc, todayISO());
+  const b = matrixBuckets(c); ui.trayCount = b.unscored.length + b.undated.length;
+  const View = { board: BoardView, matrix: MatrixView, timeline: TimelineView }[ui.view] || BoardView;
+  const panelOpen = !!ui.selectedKind;
+  return html`<div class=${cls(panelOpen && !ui.isPhone && 'pr-[420px]')}>
+      <${Header} />
+      <main class="min-w-0"><${View} doc=${doc} c=${c} ui=${ui} actions=${actions} /></main>
+    </div>
+    ${panelOpen ? html`<${DetailPanel} doc=${doc} c=${c} ui=${ui} actions=${actions} />` : null}
+    ${ui.settingsOpen ? html`<${Settings} />` : null}`;
+}
+
+async function boot() {
+  let fixture = null;
+  if (fixtureMode) fixture = await (await fetch('test/fixture.json', { cache: 'no-store' })).json();
+  store = createStore({ fixture, onChange: draw, path: isLocal && params.get('path') ? params.get('path') : undefined });
+  undoStack.length = 0;
+  draw();
+  if (!fixture && !store.hasToken()) { store.status = 'notoken'; draw(); return; }
+  try { await store.load(); } catch (e) { store.error = e.message; store.status = 'error'; draw(); }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) { e.preventDefault(); actions.undo(); }
+  if (e.key === 'Escape' && ui.selectedKind) actions.closePanel();
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && store) store.refreshIfStale(); });
+window.addEventListener('beforeunload', e => { if (store && store.pendingCount()) { store.flush(); e.preventDefault(); e.returnValue = ''; } });
+boot();
+</script>
+</body>
+</html>
