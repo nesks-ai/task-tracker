@@ -1,4 +1,4 @@
-import { html, cls, fmtDate, Dot, IMPORTANCE_COLOR } from '../ui.js';
+import { html, cls, fmtDate, IMPORTANCE_COLOR } from '../ui.js';
 import { matrixBuckets, IMPORTANCE_LABELS } from '../model.js';
 import { TaskCard } from './board.js';
 
@@ -45,7 +45,7 @@ function TrayRow({ task, doc, actions }) {
       onChange=${e => actions.updateTask(task.id, { due: e.target.value || null })} />
     <label class="text-xs text-slate-500 flex items-center gap-1">lead
       <input type="number" min="0" class="w-14 border rounded-md px-1 py-0.5 text-sm dark:bg-slate-800" value=${task.leadDays ?? 1}
-        onChange=${e => actions.updateTask(task.id, { leadDays: Math.max(0, parseInt(e.target.value || '0', 10)) })} /></label>
+        onChange=${e => { const n = parseInt(e.target.value, 10); actions.updateTask(task.id, { leadDays: Number.isFinite(n) ? Math.max(0, n) : 0 }); }} /></label>
   </div>`;
 }
 
