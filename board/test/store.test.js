@@ -174,3 +174,14 @@ test('token helpers use the shared key', () => {
   store.setToken('  new  ');
   assert.equal(storage.getItem('oq_gh_token'), 'new');
 });
+
+test('401 during flush: status notoken, ops retained, doc kept, AUTH not masked as error', async () => {
+  const { store } = mk([contentsOk(baseDoc(), 'shaA'), { status: 401 }]);
+  await store.load();
+  store.mutate(d => { d.tasks[0].title = 'mine'; }, 'edit');
+  await store.flush();
+  assert.equal(store.status, 'notoken');
+  assert.equal(store.pendingCount(), 1);
+  assert.equal(store.doc.tasks[0].title, 'mine');
+  assert.equal(store.sha, 'shaA');
+});
