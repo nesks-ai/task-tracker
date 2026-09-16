@@ -2,3 +2,7 @@
 seed-data.json
 oq/ob.md
 oq/oq.md
+.worktrees/
+.superpowers/
+.claude/
+docs/superpowers/
