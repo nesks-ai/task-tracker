@@ -63,6 +63,7 @@ const findProject = (doc, id) => doc.projects.find(p => p.id === id);
 /* -------------------------------------------------------------- mutators */
 const actions = {
   addTask(fields = {}) {
+    if (!store.doc) return null;
     const id = newId('b');
     const t = { id, projectId: null, title: '', detail: '', stage: 'next', importance: null, due: null, leadDays: 1,
       owner: 'Nibras', waitingOn: '', chaseDate: null, blockedBy: [], source: 'manual', evidence: '', legacyId: null,
@@ -103,6 +104,7 @@ const actions = {
     if (ui.selectedId === id) actions.closePanel();
   },
   addProject(fields = {}) {
+    if (!store.doc) return null;
     const id = newId('p');
     const order = Math.max(0, ...store.doc.projects.map(p => p.order || 0)) + 1;
     const p = { id, name: 'New project', domain: null, status: 'active', order, pinned: false, owner: 'Nibras',
@@ -152,9 +154,9 @@ function Header() {
         ${label}${k === 'matrix' && trayCount ? html`<span class="ml-1 text-[10px] px-1.5 rounded-full bg-amber-500 text-white">${trayCount}</span>` : null}</button>`)}</nav>
       <div class="flex-1"></div>
       <${SyncDot} />
-      <${Btn} title="Undo (Ctrl+Z)" onClick=${actions.undo} disabled=${!undoStack.length}><${Icon} name="undo" /></${Btn}>
-      <${Btn} title="New task" kind="primary" onClick=${() => { const id = actions.addTask({ projectId: ui.selectedKind === 'project' ? ui.selectedId : null }); actions.select('task', id); }}><${Icon} name="plus" /> Task</${Btn}>
-      <${Btn} title="New project" onClick=${() => { const id = actions.addProject(); actions.select('project', id); }}><${Icon} name="plus" /> Project</${Btn}>
+      <${Btn} title="Undo (Ctrl+Z)" onClick=${actions.undo} disabled=${!store.doc || !undoStack.length}><${Icon} name="undo" /></${Btn}>
+      <${Btn} title="New task" kind="primary" disabled=${!store.doc} onClick=${() => { const id = actions.addTask({ projectId: ui.selectedKind === 'project' ? ui.selectedId : null }); actions.select('task', id); }}><${Icon} name="plus" /> Task</${Btn}>
+      <${Btn} title="New project" disabled=${!store.doc} onClick=${() => { const id = actions.addProject(); actions.select('project', id); }}><${Icon} name="plus" /> Project</${Btn}>
       <${Btn} title="Theme" onClick=${() => { localStorage.setItem(THEME_KEY, isDark ? 'light' : 'dark'); isDark = applyTheme(); draw(); }}><${Icon} name=${isDark ? 'sun' : 'moon'} /></${Btn}>
       <${Btn} title="Settings" onClick=${() => { ui.settingsOpen = true; draw(); }}><${Icon} name="gear" /></${Btn}>
     </div>
@@ -171,7 +173,12 @@ function Settings() {
       <input type="password" class="w-full border rounded-md px-2 py-1 dark:bg-slate-900" placeholder=${store.hasToken() ? '••••••••  (saved)' : 'ghp_…'} value=${val} onInput=${e => setVal(e.target.value)} />
       <div class="flex gap-2 justify-end">
         <${Btn} kind="danger" onClick=${() => { store.forgetToken(); ui.settingsOpen = false; draw(); }}>Forget</${Btn}>
-        <${Btn} kind="primary" onClick=${async () => { if (val.trim()) store.setToken(val); ui.settingsOpen = false; await boot(); }}>Save</${Btn}>
+        <${Btn} kind="primary" onClick=${async () => {
+          if (!val.trim()) { ui.settingsOpen = false; draw(); return; }          // nothing pasted → just close
+          if (store.doc && store.pendingCount()) await store.flush();            // push unsaved edits first
+          if (store.doc && store.pendingCount()) { ui.settingsOpen = false; draw(); return; }  // flush failed → keep the store; header shows the red state
+          store.setToken(val); ui.settingsOpen = false; await boot();
+        }}>Save</${Btn}>
       </div>
     </div></div>`;
 }
