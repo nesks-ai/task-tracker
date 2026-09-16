@@ -206,7 +206,7 @@ function App() {
 async function boot() {
   let fixture = null;
   if (fixtureMode) fixture = await (await fetch('test/fixture.json', { cache: 'no-store' })).json();
-  store = createStore({ fixture, onChange: draw });
+  store = createStore({ fixture, onChange: draw, path: isLocal && params.get('path') ? params.get('path') : undefined });
   undoStack.length = 0;
   draw();
   if (!fixture && !store.hasToken()) { store.status = 'notoken'; draw(); return; }
