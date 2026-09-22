@@ -50,6 +50,26 @@ header{position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
   background:var(--s2); color:var(--m); border:1px solid var(--d)}
 .pill.hot{background:var(--rb); color:var(--r); border-color:var(--rd)}
 
+.tabs{display:flex; gap:2px; padding:0 4px; margin-top:10px}
+.tab{background:none; border:none; border-bottom:2px solid transparent; color:var(--m);
+  font:400 13.5px "Space Grotesk",sans-serif; padding:8px 14px 9px; cursor:pointer}
+.tab:hover{color:var(--t)}
+.tab.on{color:var(--t); font-weight:500; border-bottom-color:var(--a)}
+.tab .tcount{font:500 11px "IBM Plex Mono",monospace; color:var(--m); margin-left:6px}
+.tab.on .tcount{color:var(--a)}
+
+.why{margin:18px 0 0; padding:10px 14px; border-radius:10px; background:var(--yb,var(--ab));
+  border:1px solid var(--yd,var(--ad)); color:var(--t); font-size:12.5px}
+.deadhead{margin:26px 0 0; padding:11px 14px; border-radius:10px; background:var(--s2);
+  border:1px solid var(--d); color:var(--m); font-size:13px; cursor:pointer;
+  display:flex; align-items:center; gap:8px}
+.deadhead:hover{color:var(--t); border-color:var(--d2)}
+.lmeta{font:400 11.5px "IBM Plex Mono",monospace; color:var(--dm); margin-left:auto;
+  white-space:nowrap}
+.lbody{margin:10px 16px 0; padding:10px 12px; border-left:2px solid var(--d2);
+  background:var(--s2); border-radius:0 8px 8px 0; color:var(--m);
+  font-size:13px; white-space:pre-wrap; max-height:150px; overflow:auto}
+
 .note{margin:20px 0 0; padding:11px 14px; border-radius:10px; background:var(--ab);
   border:1px solid var(--ad); color:var(--t); font-size:13px}
 .empty{margin:64px 0; text-align:center; color:var(--m)}
@@ -139,6 +159,10 @@ input.notebox::placeholder{color:var(--dm)}
     <button class="ibtn" id="themebtn" title="Theme">◐</button>
     <button class="ibtn" id="connbtn" title="GitHub token">⚙</button>
   </div>
+  <div class="tabs">
+    <button class="tab on" data-view="open" id="tab-open">Open</button>
+    <button class="tab" data-view="lapsed" id="tab-lapsed">Lapsed</button>
+  </div>
 </header>
 
 <div class="wrap">
@@ -213,6 +237,8 @@ const HOT_HOURS=48, OVERDUE_HOURS=120;
 const OPEN=new Set(['OPEN','SNOOZED','SEND','SENDING','FAILED','NOTE']);
 
 let store=null, sha=null, lastSync=null, pending={};   // id -> unsaved body
+let view='open';          // 'open' | 'lapsed'
+let deadOpen=false;       // is the "reviewed and let go" strip expanded
 const S={sendId:null, settingsOpen:false, saving:{}, notes:{}};
 
 const $=id=>document.getElementById(id);
@@ -319,6 +345,28 @@ function openRows(){
     (stk[a.stakes]??1)-(stk[b.stakes]??1) || a.opened.localeCompare(b.opened));
   return rows;
 }
+// The Lapsed queue: rows a routine closed on the 48h timer that nobody has
+// reviewed. A query, not a second store — mirrors ar_store.lapsed_rows(). Rows
+// predating close_reason read as undefined and simply never match.
+function lapsedRows(){
+  if(!store)return[];
+  const stk={high:0,med:1,low:2};
+  return store.rows.filter(r=>r.close_reason==='lapsed'&&!r.review_outcome)
+    .sort((a,b)=>(stk[a.stakes]??1)-(stk[b.stakes]??1) ||
+      (a.closed_at||'').localeCompare(b.closed_at||''));
+}
+// Lapses he looked at and let go. Kept visible as a collapsed strip: it is the
+// audit trail, and Revive stays available so no click here is a one-way door.
+function deadRows(){
+  if(!store)return[];
+  return store.rows.filter(r=>r.review_outcome==='dead')
+    .sort((a,b)=>(b.reviewed_at||'').localeCompare(a.reviewed_at||''));
+}
+function waitedDays(r){
+  const o=Date.parse(r.opened); if(!o)return '—';
+  const d=(Date.now()-o)/864e5;
+  return (d<10?d.toFixed(1):Math.round(d))+'d';
+}
 // A row the dispatcher finished stays visible for one session so he sees the
 // outcome of his own click, rather than the card vanishing into thin air.
 function justDone(){
@@ -334,6 +382,31 @@ function chips(label,arr){
   if(!arr||!arr.length)return'';
   return `<span class="rlabel">${label}</span>`+
     arr.map(e=>`<span class="chip">${esc(e)}</span>`).join('');
+}
+
+function lapsedCardHTML(r,isDead){
+  const stk=r.stakes||'—';
+  const when=(r.closed_at||'').slice(0,10);
+  const who=esc(r.from_name||r.from_email||'—');
+  const body=(r.body||'').trim();
+  const acts=isDead
+    ? `<button class="btn" data-act="revive" data-id="${r.id}">Revive</button>
+       <span class="savenote">let go ${esc((r.reviewed_at||'').slice(0,10))}</span>`
+    : `<button class="btn primary" data-act="revive" data-id="${r.id}">Revive</button>
+       <button class="btn ghost" data-act="markdead" data-id="${r.id}">Let it go</button>
+       <span class="savenote">draft still intact</span>`;
+  return `<div class="card${isDead?' sent':''}">
+    <div class="chead">
+      <span class="mono" style="font-size:11.5px;color:var(--dm)">${r.id}</span>
+      <span class="pill${stk==='high'?' hot':''}">${esc(stk)}</span>
+      <b style="font-size:14.5px">${who}</b>
+      <span class="lmeta">lapsed ${esc(when)} · waiting ${waitedDays(r)}</span>
+    </div>
+    <div style="padding:6px 16px 0;color:var(--m);font-size:13px">${esc(r.subject||'')}</div>
+    ${r.ask?`<div style="padding:6px 16px 0;color:var(--dm);font-size:12.5px">${esc(r.ask)}</div>`:''}
+    ${body?`<div class="lbody">${esc(body)}</div>`:''}
+    <div class="cfoot">${acts}</div>
+  </div>`;
 }
 
 function cardHTML(r){
@@ -465,6 +538,26 @@ function draw(){
     Send will not go out until it runs.</div>`;
   $('banner').innerHTML=banner;
 
+  const lap=lapsedRows(), dead=deadRows();
+  $('tab-open').innerHTML=`Open<span class="tcount">${rows.length}</span>`;
+  $('tab-lapsed').innerHTML=`Lapsed<span class="tcount">${lap.length}</span>`;
+  $('tab-open').className='tab'+(view==='open'?' on':'');
+  $('tab-lapsed').className='tab'+(view==='lapsed'?' on':'');
+
+  if(view==='lapsed'){
+    const strip=dead.length
+      ? `<div class="deadhead" id="deadtoggle">${deadOpen?'▾':'▸'} ${dead.length} reviewed and let go</div>`
+        +(deadOpen?dead.map(r=>lapsedCardHTML(r,true)).join(''):'')
+      : '';
+    $('list').innerHTML = lap.length
+      ? `<div class="why">Closed by a routine because nobody replied — not because
+          you decided. Reviving one puts it back in Open with its draft intact.</div>`
+        +lap.map(r=>lapsedCardHTML(r,false)).join('')+strip
+      : `<div class="empty"><div class="big">No lapsed replies to review.</div>
+          Nothing has been dropped on the 48-hour timer since you last looked.</div>`+strip;
+    return;
+  }
+
   if(!rows.length&&!done.length){
     $('list').innerHTML=`<div class="empty"><div class="big">Nothing is waiting on you.</div>
       Inbox triage found no reply you owe. This is the healthy state.</div>`;
@@ -568,12 +661,36 @@ async function act(a,id){
     toast('Note removed'); return;
   }
   if(a==='dismiss'){
-    if(!confirm('Close this without replying? It will not come back.'))return;
+    if(!confirm('Close this without replying?'))return;
     await commit(st=>{const r=st.rows.find(x=>x.id===id);
       if(r){r.status='CLOSED'; r.closed_by='dismissed';
+        r.close_reason='dismissed';
         r.closed_at=new Date().toISOString().replace(/\.\d+Z$/,'Z');
         r.evidence='dismissed in the AR window';}},`dismiss ${id}`);
     toast('Dismissed'); return;
+  }
+  // Revive and "let it go" are the Lapsed tab's two actions. Neither asks for
+  // confirmation and neither is final: a revived row can lapse again, and a row
+  // let go keeps Revive in the collapsed strip.
+  if(a==='revive'){
+    await commit(st=>{const r=st.rows.find(x=>x.id===id);
+      if(!r||!(r.status==='CLOSED'||r.status==='SENT'))return;
+      (r.history=r.history||[]).push({status:r.status, closed_by:r.closed_by,
+        closed_at:r.closed_at, evidence:r.evidence, close_reason:r.close_reason});
+      const now=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+      r.status='OPEN'; r.closed_by=null; r.closed_at=null;
+      r.close_reason=null; r.evidence=null;
+      r.review_outcome='revived'; r.reviewed_at=now; r.revived_at=now;
+      r.revive_count=(r.revive_count||0)+1;
+      r.attempts=0; r.last_error=null;},`revive ${id}`);
+    toast('Back in Open — its draft is intact'); return;
+  }
+  if(a==='markdead'){
+    await commit(st=>{const r=st.rows.find(x=>x.id===id);
+      if(r){r.review_outcome='dead';
+        r.reviewed_at=new Date().toISOString().replace(/\.\d+Z$/,'Z');}},
+      `mark-dead ${id}`);
+    toast('Let go — still listed below if you change your mind'); return;
   }
 }
 
@@ -595,8 +712,10 @@ document.addEventListener('mouseup',()=>{
 });
 
 document.addEventListener('click',async e=>{
-  const t=e.target.closest('[data-act],[data-close],#syncbtn,#themebtn,#connbtn,#scrim,#savetok,#forgettok,#sendconfirm');
+  const t=e.target.closest('[data-act],[data-close],[data-view],#deadtoggle,#syncbtn,#themebtn,#connbtn,#scrim,#savetok,#forgettok,#sendconfirm');
   if(!t)return;
+  if(t.dataset.view){view=t.dataset.view; deadOpen=false; draw(); return;}
+  if(t.id==='deadtoggle'){deadOpen=!deadOpen; draw(); return;}
   if(t.dataset.act){await act(t.dataset.act,t.dataset.id);return;}
   if(t.hasAttribute('data-close')||t.id==='scrim'){closeSheets();return;}
   if(t.id==='sendconfirm'){await doQueue();return;}
