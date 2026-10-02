@@ -141,6 +141,22 @@ header{position:sticky; top:0; z-index:20; backdrop-filter:blur(14px);
 .badge.standing{color:var(--p); background:var(--pb)}
 .badge.resolved{color:var(--g); background:var(--gb)}
 .badge.reopened{color:var(--a); background:var(--ab)}
+.badge.lapsed{color:var(--dm); background:var(--s2)}
+/* quick actions sit beside the summary button (a button cannot hold buttons), always visible */
+.rhead{display:flex; align-items:stretch}
+.rhead>.rsum,.rhead>.striprow{flex:1; min-width:0}
+.quick{display:flex; gap:6px; align-items:center; padding:0 14px 0 2px; flex-shrink:0}
+.qbtn{font:600 11px "IBM Plex Sans",sans-serif; padding:5px 9px; border-radius:7px; white-space:nowrap;
+  border:1px solid var(--d); background:var(--s); color:var(--m)}
+.qbtn:hover{border-color:var(--d2); color:var(--t)}
+.qbtn.ok:hover{border-color:var(--gd); background:var(--gb); color:var(--g)}
+.qbtn .ql{margin-left:4px}
+.strip .rhead{border-top:1px solid var(--ad)}
+.strip .rhead>.striprow{border-top:none}
+.strip .quick{padding-right:20px}
+.strip .qbtn{background:transparent}
+/* a long amount cell must never squeeze the obligation text into a one-letter column */
+.obamt{max-width:150px; overflow:hidden; text-overflow:ellipsis}
 .rdue{font:400 12px "IBM Plex Mono",monospace; white-space:nowrap; color:var(--dm)}
 .rdue.over{color:var(--a)}
 .rcaret{font-size:10px; color:var(--dm)}
@@ -237,6 +253,13 @@ code{overflow-wrap:anywhere}
   .rsum .rdue{display:none}
   .striprow{grid-template-columns:44px 1fr auto}
   .striprow .dom{display:none}
+  /* no room beside the text on a phone: actions drop to their own line under the summary,
+     and the amount moves into the expanded detail */
+  .rhead{flex-wrap:wrap}
+  .quick{width:100%; justify-content:flex-end; padding:0 14px 10px}
+  .strip .quick{padding:0 14px 10px}
+  .qbtn{padding:6px 11px; font-size:12px}
+  .obamt{display:none}
   .crow{grid-template-columns:1fr 1fr}
   .panel{width:100vw}
 }
@@ -303,8 +326,22 @@ function toast(msg,ms=2600){const t=$('toast');t.textContent=msg;t.style.display
 function b64decode(b64){const bin=atob(b64.replace(/\n/g,''));const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder('utf-8').decode(bytes);}
 function b64encode(str){const bytes=new TextEncoder().encode(str);let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(bin);}
 function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function splitCells(line){return line.split(/(?<!\\)\|/);}
-function esc4cell(s){return s.replace(/\|/g,'\\|').replace(/\r?\n/g,' ');}
+// A pipe inside [[target|alias]] is part of the link, not a column break. Rows written with
+// unescaped alias pipes (OB-041, 23-Sep) otherwise shift every right-hand column — the app then
+// showed prose as the "amount", read a done row as live, and would have written into the wrong cell.
+function splitCells(line){
+  const out=[];let cur='',depth=0;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='['&&line[i+1]==='['){depth++;cur+='[[';i++;continue;}
+    if(ch===']'&&line[i+1]===']'&&depth>0){depth--;cur+=']]';i++;continue;}
+    if(ch==='|'&&line[i-1]!=='\\'&&depth===0){out.push(cur);cur='';continue;}
+    cur+=ch;
+  }
+  out.push(cur);return out;
+}
+// escape only bare pipes — re-escaping an already-escaped \| produced \\| on every append
+function esc4cell(s){return s.replace(/(?<!\\)\|/g,'\\|').replace(/\r?\n/g,' ');}
 function render(md){
   let h=escHtml(md);
   h=h.replace(/\[\[([^\]]+?)\\\|([^\]]+?)\]\]/g,'<span style="color:var(--u)">$2</span>');
@@ -319,6 +356,9 @@ function dateIn(s){const m=(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:null
 function statusKey(row){
   const s=row.status||'';
   if(/RESOLVED/i.test(s))return'resolved';
+  // dismissed by decision — closed, but not answered. Anchored on the LEADING status word:
+  // "OPEN (lapsed as written)" (OQ-070) is an open row that merely mentions a lapse.
+  if(/^LAPSED/i.test(leadWord(s)))return'lapsed';
   if(/REOPENED/i.test(s))return'reopened';
   if(/STANDING/i.test(s))return'standing';
   if(/🙋/.test(s))return'needs';
@@ -403,11 +443,16 @@ function workingDaysBetween(a,b){
   while(d<=end){const w=d.getUTCDay();if(w!==0&&w!==6)n++;d.setUTCDate(d.getUTCDate()+1);}
   return n;
 }
+// Status = the first word of the status cell, not any word in it. Matching anywhere hid OB-044
+// ("PAID/ACTED (reported) — NI: *"This is done"*; no evidence") as done — the exact
+// close-without-evidence that rule 10 forbids.
+function leadWord(s){return(s||'').replace(/\*\*/g,'').replace(/^[^A-Za-z]+/,'');}
 function obStatusKey(s){
-  if(/DONE/i.test(s))return'done';
-  if(/LAPSED/i.test(s))return'lapsed';
-  if(/OVERDUE/i.test(s))return'overdue';
-  if(/DUE/i.test(s))return'due';
+  const w=leadWord(s);
+  if(/^DONE/i.test(w))return'done';
+  if(/^LAPSED/i.test(w))return'lapsed';
+  if(/^OVERDUE/i.test(w))return'overdue';
+  if(/^DUE/i.test(w))return'due';
   return'scheduled';
 }
 function parseOB(content){
@@ -426,7 +471,10 @@ function parseOB(content){
       L.forEach((c,idx)=>row[c]=cc[idx].trim());
       R.forEach((c,idx)=>row[c]=cc[cc.length-R.length+idx].trim());
       row.text=cc.slice(L.length,cc.length-R.length).join('|').trim();
-      row.editable=true;
+      // an extra cell means a stray pipe somewhere: the right-hand cells are then guesses,
+      // so show the row but never write to it
+      row.editable=cc.length===full;
+      row.irregular=!row.editable;
     }else{
       // the "no date yet — retrieve" table is a different, shorter shape: id | domain | what | why | where
       L.forEach((c,idx)=>row[c]=(cc[idx]||'').trim());
@@ -638,20 +686,21 @@ function applyTheme(){document.documentElement.dataset.theme=S.theme==='dark'?'d
 
 /* ================= derived data ================= */
 function liveRows(){return[...model.OQ,...model.CN];}
+function isClosed(r){return r.sk==='resolved'||r.sk==='lapsed';}
 function tabRows(){
-  if(S.tab==='AR')return[...model.AR,...liveRows().filter(r=>r.sk==='resolved')];
-  if(S.tab==='OB')return model.OB.filter(r=>r.sk!=='done');
-  return model[S.tab].filter(r=>r.sk!=='resolved');
+  if(S.tab==='AR')return[...model.AR,...liveRows().filter(isClosed)];
+  if(S.tab==='OB')return model.OB.filter(r=>r.sk!=='done'&&r.sk!=='lapsed');
+  return model[S.tab].filter(r=>!isClosed(r));
 }
 function tabCounts(){
-  return{OQ:model.OQ.filter(r=>r.sk!=='resolved').length,
-         CN:model.CN.filter(r=>r.sk!=='resolved').length,
+  return{OQ:model.OQ.filter(r=>!isClosed(r)).length,
+         CN:model.CN.filter(r=>!isClosed(r)).length,
          OB:model.OB.filter(r=>r.sk!=='done'&&r.sk!=='lapsed').length,
-         AR:model.AR.length+liveRows().filter(r=>r.sk==='resolved').length};
+         AR:model.AR.length+liveRows().filter(isClosed).length};
 }
 function overdueRows(){
   const t=today();
-  return liveRows().filter(r=>r.sk!=='resolved'&&r.dueDate&&r.dueDate<t)
+  return liveRows().filter(r=>!isClosed(r)&&r.dueDate&&r.dueDate<t)
     .sort((a,b)=>a.dueDate<b.dueDate?-1:1);
 }
 function clearedThisWeek(){
@@ -727,22 +776,34 @@ function drawStrip(){
   const obBlock=ob.length?`<div class="strip" style="border-color:#c2410c">
     <div class="striphead"><span class="stripdot" style="background:#c2410c"></span><span class="striplabel">Hard deadlines</span>
       <span class="stripsum">${ob.length} inside the window — money, licences or rights, not decisions</span></div>
-    ${ob.map(r=>`<button class="striprow" data-open="${r.id}">
+    ${ob.map(r=>`<div class="rhead"><button class="striprow" data-open="${r.id}">
       <span class="typechip ob">OB</span>
-      <span class="q">${render(firstLine(r.text))}${obAmt(r)&&obAmt(r)!=='—'?' <b>'+escHtml(obAmt(r))+'</b>':''}</span>
+      <span class="q">${render(firstLine(r.text))}${obAmt(r)&&obAmt(r)!=='—'&&obAmt(r).length<=40?' <b>'+escHtml(obAmt(r))+'</b>':''}</span>
       <span class="dom">${escHtml(r.domain)}</span>
-      <span class="due over">${obLabel(r)}${r.leadBlown&&r.daysLeft>0?' · lead blown':''}</span></button>`).join('')}
+      <span class="due over">${obLabel(r)}${r.leadBlown&&r.daysLeft>0?' · lead blown':''}</span></button>${quickHtml(r)}</div>`).join('')}
   </div>`:'';
   const oqBlock=rows.length?`<div class="strip">
     <div class="striphead"><span class="stripdot"></span><span class="striplabel">Needs you now</span>
       <span class="stripsum">${rows.length} past their gate date${rows.length>shown.length?' — oldest '+shown.length+' pinned, the rest are in the list':''}</span></div>
-    ${shown.map(r=>`<button class="striprow" data-open="${r.id}">
+    ${shown.map(r=>`<div class="rhead"><button class="striprow" data-open="${r.id}">
       <span class="typechip ${r.type.toLowerCase()}">${r.type}</span>
       <span class="q">${render(firstLine(r.text))}</span>
       <span class="dom">${escHtml(r.domain)}</span>
-      <span class="due">${dueLabel(r)}</span></button>`).join('')}
+      <span class="due">${dueLabel(r)}</span></button>${quickHtml(r)}</div>`).join('')}
   </div>`:'';
   $('strip').innerHTML=obBlock+oqBlock;
+}
+// One-click close from the list. Each still asks one question in a dialog: an OB closes on
+// evidence (rule 10), a dismissal records why, and a resolve takes an optional link/note.
+// Cancelling the dialog is the undo for a mis-click.
+function quickHtml(r){
+  const b=(attr,glyph,label,cls,title)=>`<button class="qbtn ${cls||''}" ${attr}="${r.id}" title="${title}">${glyph}<span class="ql">${label}</span></button>`;
+  if(r.type==='OB'){
+    if(!r.editable||r.sk==='done'||r.sk==='lapsed')return'';
+    return`<div class="quick">${b('data-obdone','✓','Done','ok','Mark done — needs evidence')}${b('data-oblapse','💤','Lapse','','Lapse by decision — needs a reason')}</div>`;
+  }
+  if(!r.editable||r.section==='AR'||isClosed(r))return'';
+  return`<div class="quick">${b('data-qres','✓','Resolve','ok','Resolve — optional note or link')}${b('data-qdis','✕','Dismiss','','Dismiss (💤 LAPSED) — needs a reason')}</div>`;
 }
 function firstLine(t){
   const s=t.replace(/\[\[([^\]\\|]+?)\\\|([^\]]+?)\]\]/g,'$2').replace(/\[\[([^\]]+?)\]\]/g,'$1');
@@ -793,7 +854,7 @@ function drawComposer(){
     <datalist id="domlist">${[...new Set(liveRows().map(r=>r.domain).filter(d=>d&&d.length<25))].map(d=>`<option>${escHtml(d)}</option>`).join('')}</datalist>
   </div>`;
 }
-function badge(sk){const lab={open:'Open',needs:'Needs me',standing:'Standing',resolved:'Resolved',reopened:'Reopened'}[sk];
+function badge(sk){const lab={open:'Open',needs:'Needs me',standing:'Standing',resolved:'Resolved',reopened:'Reopened',lapsed:'Dismissed'}[sk];
   return`<span class="badge ${sk}">${lab}</span>`;}
 function drawMain(withToolbar=true){
   drawHeader();drawStrip();
@@ -820,16 +881,16 @@ function drawMain(withToolbar=true){
 }
 function rowHtml(r,t){
   if(r.type==='OB')return obRowHtml(r);
-  const over=r.dueDate&&r.dueDate<t&&r.sk!=='resolved';
+  const over=r.dueDate&&r.dueDate<t&&!isClosed(r);
   const openRow=S.openId===r.id;
   return`<article class="row" data-id="${r.id}">
-    <button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
+    <div class="rhead"><button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
       <span class="typechip ${r.type.toLowerCase()}">${r.type}</span>
-      <span class="rq ${r.sk==='resolved'?'resolved':''}">${render(firstLine(r.text))}</span>
+      <span class="rq ${isClosed(r)?'resolved':''}">${render(firstLine(r.text))}</span>
       ${badge(r.sk)}
       <span class="rdue ${over?'over':''}">${dueLabel(r)}</span>
       <span class="rcaret">${openRow?'▾':'▸'}</span>
-    </button>
+    </button>${quickHtml(r)}</div>
     ${openRow?detailHtml(r):''}
   </article>`;
 }
@@ -837,14 +898,17 @@ function obRowHtml(r){
   const openRow=S.openId===r.id;
   const urgent=r.sk==='overdue'||r.leadBlown||(r.daysLeft!==null&&r.daysLeft<=5);
   const done=r.sk==='done'||r.sk==='lapsed';
+  // the summary grid is fixed at five tracks; always emit the amount slot (empty if none)
+  // so the date and caret never slide into the wrong column
+  const amt=obAmt(r);
   return`<article class="row" data-id="${r.id}">
-    <button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
+    <div class="rhead"><button class="rsum" data-open="${r.id}" aria-expanded="${openRow}">
       <span class="typechip ob">OB</span>
       <span class="rq ${done?'resolved':''}">${render(firstLine(r.text))}</span>
-      ${obAmt(r)&&obAmt(r)!=='—'?`<span class="obamt">${escHtml(obAmt(r))}</span>`:''}
-      <span class="rdue ${urgent&&!done?'over':''}">${obLabel(r)}</span>
+      <span class="obamt" title="${escHtml(amt)}">${amt&&amt!=='—'?escHtml(amt):''}</span>
+      <span class="rdue ${urgent&&!done?'over':''}">${r.irregular?'⚠️ ':''}${obLabel(r)}</span>
       <span class="rcaret">${openRow?'▾':'▸'}</span>
-    </button>
+    </button>${quickHtml(r)}</div>
     ${openRow?obDetail(r):''}
   </article>`;
 }
@@ -857,6 +921,8 @@ function obDetail(r){
     <div class="oqgrid">
       <div>
         ${f('Counterparty',r.counterparty)}
+        ${f('Amount',r.amount)}
+        ${f('Hard date',r.hard)}
         ${f('Pays / acts',r.actor)}
         ${f('Countdown',ladder)}
       </div>
@@ -872,6 +938,7 @@ function obDetail(r){
       ${r.editable&&r.sk!=='lapsed'&&r.sk!=='done'?
         `<button class="abtn" data-oblapse="${r.id}">💤 Lapse by decision</button>`:''}
       ${r.undated?'<span class="irregular">❓ no date yet — get it, then add the row properly in the vault</span>':''}
+      ${r.irregular?'<span class="irregular">⚠️ irregular table row (a stray | splits a cell) — fields above may be misread; fix it in the vault</span>':''}
       <span class="rowid">${r.id}</span>
     </div></div>`;
 }
@@ -982,7 +1049,7 @@ function addRow(){
 
 /* ================= events (delegated) ================= */
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-tab],[data-open],[data-g],[data-dom],[data-st],[data-sort],[data-group],[data-ct],[data-act],[data-obdone],[data-oblapse],#newbtn,#caddbtn,#clearbtn,#themebtn,#syncbtn,#connbtn,#scrim,#xbtn,#savetok,#forgettok');
+  const t=e.target.closest('[data-tab],[data-open],[data-g],[data-dom],[data-st],[data-sort],[data-group],[data-ct],[data-act],[data-obdone],[data-oblapse],[data-qres],[data-qdis],#newbtn,#caddbtn,#clearbtn,#themebtn,#syncbtn,#connbtn,#scrim,#xbtn,#savetok,#forgettok');
   if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.openId=null;draw();return;}
   if(t.dataset.open!==undefined&&t.dataset.open){
@@ -997,6 +1064,32 @@ document.addEventListener('click',e=>{
   if(t.dataset.group){S.grouping=S.grouping==='domain'?'date':'domain';drawMain();return;}
   if(t.dataset.ct){S.composerType=t.dataset.ct;syncDrafts();drawComposer();return;}
   if(t.dataset.act){e.stopPropagation();setStatus(findRow(t.dataset.id),t.dataset.act);return;}
+  if(t.dataset.qres){
+    e.stopPropagation();
+    const r=findRow(t.dataset.qres);
+    const note=prompt('Resolve '+r.id+'?\n\nOptional: how it was settled, or a [[page]] link. Cancel to leave it open.','');
+    if(note===null)return;
+    commit(()=>{const row=findRow(r.id);
+      const cur=(row.resolution&&row.resolution!=='—')?row.resolution+' ':''; // read inside op: re-run on conflict
+      setCell(row,'status','✅ RESOLVED '+today()+' (live)');
+      if(note.trim())setCell(row,'resolution',cur+'✅ '+today()+': '+note.trim());
+    },r.id+' → resolved');
+    return;
+  }
+  // Dismiss = the register's 💤 LAPSED: closed by decision, not answered. The reason is the
+  // record that stops it being re-raised; the gardening pass moves it to the archive.
+  if(t.dataset.qdis){
+    e.stopPropagation();
+    const r=findRow(t.dataset.qdis);
+    const why=prompt('Dismiss '+r.id+' — why? Logged on the row as 💤 LAPSED, reversible with Reopen.','');
+    if(why===null||!why.trim())return;
+    commit(()=>{const row=findRow(r.id);
+      const cur=(row.resolution&&row.resolution!=='—')?row.resolution+' ':''; // read inside op: re-run on conflict
+      setCell(row,'status','💤 LAPSED '+today()+' — dismissed (live)');
+      setCell(row,'resolution',cur+'📝 '+today()+': dismissed — '+why.trim());
+    },r.id+' → dismissed');
+    return;
+  }
   // Closure needs a link — the register's rule, enforced here rather than trusted.
   if(t.dataset.obdone){
     e.stopPropagation();
