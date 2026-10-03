@@ -455,7 +455,11 @@ function cardHTML(r){
         <button class="btn ghost" data-act="dismiss" data-id="${r.id}">Dismiss</button>
         <button class="btn ghost" data-act="snooze" data-id="${r.id}">Snooze 1d</button>
         ${r.web_link?`<a class="btn ghost" href="${esc(r.web_link)}" target="_blank" rel="noopener">Open in mail</a>`:''}
-        <button class="btn primary" data-act="send" data-id="${r.id}"${body.trim()?'':' disabled'}>Send</button>
+        ${r.channel==='whatsapp'
+          ? `<button class="btn" data-act="wasent" data-id="${r.id}">I've sent it</button>
+             <button class="btn ghost" data-act="wacopy" data-id="${r.id}"${body.trim()?'':' disabled'}>Copy</button>
+             <button class="btn primary" data-act="wa" data-id="${r.id}"${body.trim()?'':' disabled'}>Open in WhatsApp</button>`
+          : `<button class="btn primary" data-act="send" data-id="${r.id}"${body.trim()?'':' disabled'}>Send</button>`}
       </div>`;
   }
 
@@ -631,8 +635,47 @@ async function doQueue(){
   toast('Queued — going out within ~10 minutes');
 }
 
+/* WhatsApp rows are paste-only: no routine sends on WhatsApp (NI's rule since
+   2026-09-07), so these rows never get a Send button. "Open in WhatsApp" hands
+   the draft to WhatsApp with the text filled in; he picks the chat and presses
+   send himself. Rows carry no phone number, so the link opens the chat picker.
+   window.open must run before the first await, while the click still counts as
+   a user gesture, or the popup blocker eats it. */
+function waBody(id){
+  const r=store.rows.find(x=>x.id===id);
+  return pending[id]!==undefined?pending[id]:((r&&r.body)||'');
+}
 async function act(a,id){
-  if(a==='send'){openSend(id);return;}
+  if(a==='send'){
+    const r=store.rows.find(x=>x.id===id);
+    if(r&&r.channel==='whatsapp'){toast('WhatsApp drafts are not sent from here — use Open in WhatsApp',3600);return;}
+    openSend(id);return;
+  }
+  if(a==='wa'){
+    const body=waBody(id);
+    if(!body.trim()){toast('Nothing to send — the draft is empty');return;}
+    window.open('https://wa.me/?text='+encodeURIComponent(body),'_blank','noopener');
+    if(pending[id]!==undefined){clearTimeout(saveTimer); await saveBody(id);}
+    toast('Pick the chat in WhatsApp and send — then tap "I\'ve sent it"',4200);
+    return;
+  }
+  if(a==='wacopy'){
+    try{ await navigator.clipboard.writeText(waBody(id)); toast('Copied — paste it into the chat'); }
+    catch(e){ toast('Copy blocked by the browser — select the text and copy it',3600); }
+    return;
+  }
+  if(a==='wasent'){
+    if(!confirm('Mark this as sent on WhatsApp? Only if it has actually gone out.'))return;
+    const body=pending[id]!==undefined?pending[id]:null;
+    await commit(st=>{const r=st.rows.find(x=>x.id===id); if(!r)return;
+      const now=new Date().toISOString().replace(/\.\d+Z$/,'Z');
+      if(body!==null){r.body=body; r.body_edited_at=now;}
+      r.status='CLOSED'; r.closed_by='self'; r.close_reason='sent'; r.closed_at=now;
+      r.send_requested_at=null;
+      r.evidence='marked sent on WhatsApp in the AR window';},`whatsapp sent ${id}`);
+    delete pending[id];
+    toast('Closed as sent'); return;
+  }
   if(a==='unqueue'){
     await commit(st=>{const r=st.rows.find(x=>x.id===id);
       if(r){r.status='OPEN'; r.send_requested_at=null;}},`cancel send ${id}`);
