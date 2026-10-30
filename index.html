@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Tracker</title>
+<script src="hub/nav.js" defer></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -125,15 +126,27 @@ const Repo = {
   _sha: undefined,
   _url(c) { return `https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path.split('/').map(encodeURIComponent).join('/')}`; },
   _headers(c) { return { Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github+json' }; },
+  _last: undefined, // JSON last read from / written to the repo; an identical save is skipped
   async _get(c) {
-    const r = await fetch(this._url(c), { headers: this._headers(c) });
+    const r = await fetch(this._url(c), { headers: this._headers(c), cache: 'no-store' });
     if (r.status === 404) return { data: null, sha: null };
     if (!r.ok) throw new Error(`Repo read failed: ${r.status}`);
     const j = await r.json();
-    return { data: JSON.parse(b64decode(j.content)), sha: j.sha };
+    let content = j.content;
+    if (!content) { // contents API returns content:"" above 1 MiB; read the blob instead
+      const b = await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/git/blobs/${j.sha}`, { headers: this._headers(c), cache: 'no-store' });
+      if (!b.ok) throw new Error(`Repo blob read failed: ${b.status}`);
+      content = (await b.json()).content;
+    }
+    const text = b64decode(content);
+    if (!text.trim()) throw new Error('Repo file came back empty');
+    return { data: JSON.parse(text), sha: j.sha };
   },
-  async load(c) { const g = await this._get(c); this._sha = g.sha; return g.data; },
+  async load(c) { const g = await this._get(c); this._sha = g.sha; this._last = g.data ? JSON.stringify(g.data) : undefined; return g.data; },
   async save(c, data) {
+    // Opening the app persists straight after loading; without this every open
+    // would write an empty-change commit into llm-wiki.
+    if (JSON.stringify(data) === this._last) return;
     let sha = this._sha;
     if (sha === undefined) { const g = await this._get(c); sha = g.sha; }
     const put = s => fetch(this._url(c), {
@@ -144,6 +157,7 @@ const Repo = {
     if (r.status === 409) { const g = await this._get(c); r = await put(g.sha); } // stale sha → refetch + retry
     if (!r.ok) throw new Error(`Repo save failed: ${r.status}`);
     this._sha = (await r.json()).content.sha;
+    this._last = JSON.stringify(data);
   },
   async testToken(token) {
     const r = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } });
@@ -158,19 +172,40 @@ const Repo = {
   },
 };
 
+// Default since 2026-10-30: tracker/tracker.json in the private llm-wiki repo, read
+// with the token /hub/, /ar/, /oq/ and /board/ already share (one paste per device).
+// The old secret gist is left as a frozen backup and is no longer written.
+const SHARED_TOKEN_KEY = 'oq_gh_token';
+const DEFAULT_REPO = { type: 'repo', owner: 'nesks-ai', repo: 'llm-wiki', path: 'tracker/tracker.json', shared: true };
+
 // Facade: picks backend from config type; falls back to legacy gist config.
 const Store = {
+  // A device that has never loaded from the cloud must not write to it: the app
+  // persists straight after loading, so a failed first read on an empty phone
+  // would otherwise push an empty task list over the real one.
+  _loaded: false,
   cfg() {
     try { const c = JSON.parse(localStorage.getItem(STORE_KEY)); if (c && c.type) return c; } catch {}
+    const t = localStorage.getItem(SHARED_TOKEN_KEY);
+    if (t) return { ...DEFAULT_REPO, token: t };
     try { const g = JSON.parse(localStorage.getItem(GIST_KEY)); if (g && g.gistId) return { type: 'gist', ...g }; } catch {}
     return null;
   },
-  setCfg(c) { localStorage.setItem(STORE_KEY, JSON.stringify(c)); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; },
-  clearCfg() { localStorage.removeItem(STORE_KEY); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; },
+  setCfg(c) { localStorage.setItem(STORE_KEY, JSON.stringify(c)); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; this._loaded = false; },
+  clearCfg() { localStorage.removeItem(STORE_KEY); localStorage.removeItem(GIST_KEY); Repo._sha = undefined; this._loaded = false; },
   label() { const c = this.cfg(); return !c ? null : c.type === 'repo' ? 'private repo' : 'secret gist'; },
   isRepo() { const c = this.cfg(); return !!c && c.type === 'repo'; },
-  async load() { const c = this.cfg(); if (!c) return null; return c.type === 'repo' ? Repo.load(c) : Gist.load(c); },
-  async save(data) { const c = this.cfg(); if (!c) return; return c.type === 'repo' ? Repo.save(c, data) : Gist.save(c, data); },
+  async load() {
+    const c = this.cfg(); if (!c) return null;
+    const d = await (c.type === 'repo' ? Repo.load(c) : Gist.load(c));
+    this._loaded = true;
+    return d;
+  },
+  async save(data) {
+    const c = this.cfg(); if (!c) return;
+    if (!this._loaded) throw new Error('Not saving: tasks never loaded from the cloud on this device');
+    return c.type === 'repo' ? Repo.save(c, data) : Gist.save(c, data);
+  },
 };
 
 // ── App ──
@@ -619,7 +654,9 @@ function Settings({ dk, categories, setCategories, pocs, setPocs, tasks, setTask
                 <div class="flex items-center gap-2 text-xs">
                   <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span>Private repo <span class="font-mono opacity-80">${storeCfg.owner}/${storeCfg.repo}</span></span>
-                  <button onClick=${onDisconnectSync} class="ml-auto text-rose-500 hover:underline">Disconnect</button>
+                  ${storeCfg.shared
+                    ? html`<a href="hub/" class="ml-auto underline opacity-70">Token on Home</a>`
+                    : html`<button onClick=${onDisconnectSync} class="ml-auto text-rose-500 hover:underline">Disconnect</button>`}
                 </div>
               ` : storeCfg && storeCfg.type==='gist' ? html`
                 <div class="p-2.5 rounded-md text-xs mb-2 ${dk?'bg-amber-900/30 text-amber-200':'bg-amber-50 text-amber-800'}">
